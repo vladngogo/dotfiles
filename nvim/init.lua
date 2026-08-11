@@ -190,20 +190,41 @@ require("lazy").setup({
  },
 
   -- Treesitter (parser installer — highlighting is built into nvim 0.12+)
+  -- Must track the `main` branch: `master` is archived and its API lacks
+  -- get_installed()/install(). main does not support lazy-loading.
   {
     "nvim-treesitter/nvim-treesitter",
+    branch = "main",
+    lazy = false,
     build = ":TSUpdate",
     config = function()
-      require("nvim-treesitter").setup()
-      -- Auto-install parsers if missing
-      local installed = require("nvim-treesitter").get_installed()
-      local wanted = { "go", "lua", "bash", "markdown" }
+      local ts = require("nvim-treesitter")
+      ts.setup()
+
+      local wanted = { "go", "lua", "bash", "markdown", "sql", "python", "json", "yaml" }
+      local installed = ts.get_installed()
       local to_install = vim.tbl_filter(function(lang)
         return not vim.tbl_contains(installed, lang)
       end, wanted)
       if #to_install > 0 then
-        require("nvim-treesitter").install(to_install)
+        ts.install(to_install)
       end
+
+      -- main branch ships queries but does not enable any features; highlighting,
+      -- folds and indent are opt-in per buffer via Nvim's built-in treesitter.
+      vim.api.nvim_create_autocmd("FileType", {
+        callback = function(ev)
+          local lang = vim.treesitter.language.get_lang(vim.bo[ev.buf].filetype)
+          if not lang or not vim.tbl_contains(ts.get_installed(), lang) then
+            return
+          end
+          if not pcall(vim.treesitter.start, ev.buf, lang) then
+            return
+          end
+          vim.wo[0][0].foldexpr = "v:lua.vim.treesitter.foldexpr()"
+          vim.bo[ev.buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+        end,
+      })
     end,
   },
 
