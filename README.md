@@ -2,6 +2,22 @@
 
 Portable nvim and tmux configuration. Tokyonight theme across both.
 
+## Requirements
+
+- **Neovim 0.12.0+** — `nvim-treesitter` tracks its `main` branch, which requires 0.12
+  and does not work on 0.11.
+- **`tree-sitter` CLI >= 0.26.1**, matching your CPU architecture — install via a
+  package manager, *not npm*. The `main` branch shells out to `tree-sitter build`
+  for every parser, so highlighting silently does nothing without it.
+  ```bash
+  brew install tree-sitter-cli      # macOS
+  cargo install tree-sitter-cli     # Linux (or your distro package)
+  ```
+- **A C compiler**, plus `tar` and `curl` on PATH — used to fetch and compile parsers.
+
+`install.sh` warns if the CLI is missing, too old, or built for the wrong
+architecture, but does not install it for you.
+
 ## Setup
 
 ```bash
@@ -11,6 +27,8 @@ cd ~/github/dotfiles
 ```
 
 The install script symlinks configs into place, backing up any existing files first.
+On first launch nvim installs its plugins and treesitter parsers automatically —
+give it a minute before expecting highlighting to work.
 
 ## Structure
 
@@ -193,6 +211,54 @@ tmux new -s dev
 - **Relative line numbers** make `5j` / `12k` jumps easy — just read the number next to the target line.
 - **`Ctrl-a z`** zooms a tmux pane to fullscreen and back — great for temporarily focusing on one pane.
 - **Splits open in the current directory** — `Ctrl-a |` and `Ctrl-a -` inherit the working directory of the current pane.
+
+---
+
+## Troubleshooting
+
+### No syntax highlighting
+
+Start with `:checkhealth vim.treesitter` — it lists every parser it found, its ABI
+version, and its path. Parsers install to `~/.local/share/nvim/site/parser/`.
+
+**`attempt to call field 'get_installed' (a nil value)` on startup**
+
+`nvim-treesitter` is on the archived `master` branch instead of `main`. The two have
+incompatible APIs, and lazy.nvim aborts the whole plugin config on this error.
+
+The spec in `init.lua` pins `branch = "main"` — if that pin is ever dropped,
+lazy.nvim checks out the plugin's default branch (`master`) and rewrites
+`lazy-lock.json`, so the problem returns on every sync. Verify with:
+
+```bash
+grep treesitter nvim/lazy-lock.json     # must read "branch": "main"
+```
+
+Then `:Lazy sync` to correct it.
+
+**`incompatible architecture (have 'x86_64', need 'arm64')`**
+
+Parsers were compiled for a different CPU than your nvim — typically leftovers from
+an Intel → Apple Silicon migration. Highlighting fails even though the parsers look
+installed. Check what you have, then rebuild:
+
+```bash
+file "$(command -v tree-sitter)"                        # must match `uname -m`
+file ~/.local/share/nvim/site/parser/*.so | grep -c arm64
+
+rm -f ~/.local/share/nvim/site/parser/*.so              # clear stale parsers
+nvim -c 'TSUpdate'                                      # rebuild for this arch
+```
+
+Fix the CLI's architecture *first* — rebuilding with an x86_64 CLI just reproduces
+the same broken parsers. Note that stale `.so` files inside the plugin directory are
+untracked, so they survive branch switches and shadow correct parsers via
+`runtimepath`; delete them rather than assuming a reinstall clears them.
+
+**Highlighting works in some filetypes but not others**
+
+The parser for that language isn't installed. `init.lua` installs a fixed list —
+add the language there, or run `:TSInstall <lang>` for a one-off.
 
 ---
 
