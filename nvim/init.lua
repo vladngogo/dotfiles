@@ -26,10 +26,11 @@ o.smartcase      = true          -- ...unless you type a capital
 o.updatetime     = 250           -- faster CursorHold / gitsigns updates
 o.termguicolors  = true
 o.clipboard      = "unnamedplus" -- use system clipboard
+o.undofile       = true          -- persist undo history across sessions
 
 -- ── Bootstrap lazy.nvim ─────────────────────────────────────
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
-if not vim.loop.fs_stat(lazypath) then
+if not (vim.uv or vim.loop).fs_stat(lazypath) then
   vim.fn.system({
     "git", "clone", "--filter=blob:none",
     "https://github.com/folke/lazy.nvim.git",
@@ -70,15 +71,15 @@ require("lazy").setup({
     branch = "0.1.x",
     dependencies = { "nvim-lua/plenary.nvim" },
     config = function()
-        require("telescope").setup({
-            defaults = {
-                file_ignore_patterns = { "%.git/", "node_modules" },
-                preview = {
-                    treesitter = false,
-                },
-            },
-        })
-    end
+      require("telescope").setup({
+        defaults = {
+          file_ignore_patterns = { "%.git/", "node_modules" },
+          preview = {
+            treesitter = false,
+          },
+        },
+      })
+    end,
   },
 
   -- Git signs (inline blame, hunk preview)
@@ -100,7 +101,7 @@ require("lazy").setup({
   -- Git commands (:Git ...)
   "tpope/vim-fugitive",
 
- -- Mason (just for installing gopls binary)
+  -- Mason (just for installing gopls binary)
   {
     "williamboman/mason.nvim",
     config = function()
@@ -158,7 +159,7 @@ require("lazy").setup({
         end,
       })
 
-     -- nvim-cmp setup
+      -- nvim-cmp setup
       local cmp = require("cmp")
       local luasnip = require("luasnip")
       cmp.setup({
@@ -187,7 +188,7 @@ require("lazy").setup({
         }),
       })
     end,
- },
+  },
 
   -- Treesitter (parser installer — highlighting is built into nvim 0.12+)
   -- Must track the `main` branch: `master` is archived and its API lacks
