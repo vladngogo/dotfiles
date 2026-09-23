@@ -14,6 +14,16 @@ Portable nvim and tmux configuration. Tokyonight theme across both.
   cargo install tree-sitter-cli     # Linux (or your distro package)
   ```
 - **A C compiler**, plus `tar` and `curl` on PATH — used to fetch and compile parsers.
+- **A Nerd Font** in your terminal — `nvim-web-devicons`, `lualine`, and the
+  gitsigns delete glyph all render icon codepoints that a regular font doesn't
+  have. Without one they show as boxes/tofu instead of icons. Grab one from
+  [nerdfonts.com](https://www.nerdfonts.com/) and set it as your terminal's font.
+- **A clipboard tool**, for `unnamedplus`/tmux yank to reach the system
+  clipboard — `pbcopy` (macOS, built in), `wl-clipboard` (Wayland), or
+  `xclip`/`xsel` (X11). Neovim autodetects whichever is installed; tmux's
+  `tmux.conf` picks one at config-load time (see below).
+- **tmux >= 3.2** — the copy-mode clipboard binding uses `%if`/`%elif` config
+  conditionals, which older tmux versions don't understand.
 
 `install.sh` warns if the CLI is missing, too old, or built for the wrong
 architecture, but does not install it for you.
@@ -201,7 +211,7 @@ tmux new -s dev
 
 ## Tips and Tricks
 
-- **System clipboard works everywhere** — nvim uses `unnamedplus`, tmux yanks pipe to `xclip`. Copy in one, paste in the other.
+- **System clipboard works everywhere** — nvim uses `unnamedplus`, tmux yanks pipe to `pbcopy`/`wl-copy`/`xclip` depending on platform. Copy in one, paste in the other.
 - **Mouse is on** in tmux — click to select panes, scroll to see history. But keyboard is faster.
 - **Escape has no delay** — `escape-time 0` in tmux means nvim mode switches are instant.
 - **Windows start at 1** — both tmux windows and panes are 1-indexed (not 0).
