@@ -4,26 +4,31 @@ set -euo pipefail
 
 DOTFILES="$(cd "$(dirname "$0")" && pwd)"
 
+# Back up $1 to a timestamped path so repeated runs never clobber an earlier backup.
+backup() {
+    local target="$1"
+    if [ -e "$target" ] && [ ! -L "$target" ]; then
+        local dest
+        dest="${target}.bak.$(date +%Y%m%d%H%M%S)"
+        echo "Backing up existing $target → $dest"
+        mv "$target" "$dest"
+    fi
+}
+
 # ── nvim ──────────────────────────────────────────────────────
 NVIM_DIR="$HOME/.config/nvim"
 mkdir -p "$NVIM_DIR"
 
 for f in init.lua lazy-lock.json; do
     target="$NVIM_DIR/$f"
-    if [ -e "$target" ] && [ ! -L "$target" ]; then
-        echo "Backing up existing $target → ${target}.bak"
-        mv "$target" "${target}.bak"
-    fi
+    backup "$target"
     ln -sf "$DOTFILES/nvim/$f" "$target"
     echo "Linked $target → $DOTFILES/nvim/$f"
 done
 
 # ── tmux ──────────────────────────────────────────────────────
 TMUX_TARGET="$HOME/.tmux.conf"
-if [ -e "$TMUX_TARGET" ] && [ ! -L "$TMUX_TARGET" ]; then
-    echo "Backing up existing $TMUX_TARGET → ${TMUX_TARGET}.bak"
-    mv "$TMUX_TARGET" "${TMUX_TARGET}.bak"
-fi
+backup "$TMUX_TARGET"
 ln -sf "$DOTFILES/tmux/tmux.conf" "$TMUX_TARGET"
 echo "Linked $TMUX_TARGET → $DOTFILES/tmux/tmux.conf"
 
