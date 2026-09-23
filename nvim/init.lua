@@ -192,9 +192,13 @@ require("lazy").setup({
   -- Treesitter (parser installer — highlighting is built into nvim 0.12+)
   -- Must track the `main` branch: `master` is archived and its API lacks
   -- get_installed()/install(). main does not support lazy-loading.
+  -- Pinned to a commit verified working with arm64-rebuilt parsers (see
+  -- 57e73d7) so routine lockfile syncs can't drift it and reintroduce
+  -- an ABI mismatch; bump deliberately and rebuild parsers when you do.
   {
     "nvim-treesitter/nvim-treesitter",
     branch = "main",
+    commit = "c9f9ed6c1892f629ea399f4ee7905f2686fa13f2",
     lazy = false,
     build = ":TSUpdate",
     config = function()
