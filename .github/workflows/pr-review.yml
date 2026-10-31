@@ -30,6 +30,11 @@ jobs:
         with:
           fetch-depth: 1
 
+      # The checkout is only the PR merge commit; fetch the base so the
+      # reviewer can diff and compare against it.
+      - name: Fetch base branch
+        run: git fetch --depth=1 origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
+
       - name: Build prompt
         id: prompt
         run: |

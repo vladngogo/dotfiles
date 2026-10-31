@@ -70,9 +70,6 @@ esac
 # Codex reads ~/.codex/AGENTS.md directly.
 link "$AGENTS_SRC/AGENTS.md" "$HOME/.codex/AGENTS.md"
 
-if ! command -v jq >/dev/null 2>&1; then
-    echo "WARNING: jq not found — agents/hooks/guard-git.sh needs it to read hook input."
-fi
 
 # ── treesitter prerequisites ──────────────────────────────────
 # nvim-treesitter (main branch) shells out to `tree-sitter build` for every

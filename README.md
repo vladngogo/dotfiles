@@ -51,7 +51,7 @@ tmux/
 agents/             — tool-agnostic agent config (the source of truth)
   AGENTS.md         — global instructions, linked for every agent tool
   skills/<name>/    — SKILL.md skills (build-evals, fold-or-keep)
-  hooks/            — guard scripts (guard-git.sh blocks pushes to main, force pushes)
+  hooks/guard-bash  — blocks pushes to main/master, force pushes, and credential-path access
   bin/agent-eval    — eval loop: run cases in parallel worktrees, grade, compare (→ ~/.local/bin)
   bin/agent-link    — attach repos/<repo>.md to a repo as CLAUDE.local.md, uncommitted
   repos/<repo>.md   — personal notes for one repo
@@ -87,7 +87,11 @@ those edits land in this repo as diffs.
 
 Skills go stale as models improve. Before adding one, check the model doesn't
 already do the task well without it, and prune ones that no longer earn their
-place. The hook needs `jq`.
+place.
+
+`guard-bash` and the `settings.json` deny rules stop *accidents*, not a determined
+agent: a script or `eval` can hide any command. Server-side branch protection
+and a sandbox are the real boundaries.
 
 ---
 

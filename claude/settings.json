@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/hooks/guard-git.sh"
+            "command": "~/.claude/hooks/guard-bash"
           }
         ]
       }

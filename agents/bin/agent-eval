@@ -342,6 +342,11 @@ def cmd_compare(args) -> int:
         b, c = base.get(cid), cand.get(cid)
         fmt = lambda s: f"{s['passed']}/{s['runs']}" if s else "-"  # noqa: E731
         note = ""
+        if b and not c:
+            # Dropping a failing case must not silently clear a regression.
+            note, regressed = "MISSING from candidate", True
+        elif c and not b:
+            note = "new (no baseline)"
         if b and c:
             if c["pass_rate"] < b["pass_rate"]:
                 note, regressed = "REGRESSION", True

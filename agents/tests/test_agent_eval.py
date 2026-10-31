@@ -83,6 +83,19 @@ class AgentEvalTest(unittest.TestCase):
         self.assertEqual(len(wt.strip().splitlines()), 1)
         self.assertEqual((self.repo / "billing.txt").read_text(), "do not touch\n")
 
+    def test_compare_flags_missing_case(self):
+        self.config("echo world >> app.txt")
+        self.assertEqual(self.run_eval("run", "--label", "full", "--runs", "1").returncode, 0)
+        self.assertEqual(self.run_eval("run", "--label", "subset", "--runs", "1",
+                                       "-k", "greet").returncode, 0)
+        cmp = self.run_eval("compare", "full", "subset")
+        self.assertEqual(cmp.returncode, 1)
+        self.assertIn("MISSING", cmp.stdout)
+        # Reverse direction: a case with no baseline is reported, not a regression.
+        cmp = self.run_eval("compare", "subset", "full")
+        self.assertEqual(cmp.returncode, 0, cmp.stdout)
+        self.assertIn("new (no baseline)", cmp.stdout)
+
     def test_filter_and_label_reuse(self):
         self.config("true")
         self.assertEqual(self.run_eval("run", "--label", "a", "-k", "greet").returncode, 0)
