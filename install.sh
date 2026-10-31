@@ -59,6 +59,14 @@ for hook in "$AGENTS_SRC"/hooks/*; do
     link "$hook" "$CLAUDE_DIR/hooks/$(basename "$hook")"
 done
 
+for bin in "$AGENTS_SRC"/bin/*; do
+    link "$bin" "$HOME/.local/bin/$(basename "$bin")"
+done
+case ":$PATH:" in
+    *":$HOME/.local/bin:"*) ;;
+    *) echo "WARNING: ~/.local/bin is not on PATH — agent-eval won't be found." ;;
+esac
+
 # Codex reads ~/.codex/AGENTS.md directly.
 link "$AGENTS_SRC/AGENTS.md" "$HOME/.codex/AGENTS.md"
 

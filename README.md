@@ -52,6 +52,8 @@ agents/             — tool-agnostic agent config (the source of truth)
   AGENTS.md         — global instructions, linked for every agent tool
   skills/<name>/    — SKILL.md skills (build-evals, fold-or-keep)
   hooks/            — guard scripts (guard-git.sh blocks pushes to main, force pushes)
+  bin/agent-eval    — eval loop: run cases in parallel worktrees, grade, compare (→ ~/.local/bin)
+  tests/            — `python3 -m unittest discover -s agents/tests`
 claude/             — thin Claude Code adapter
   CLAUDE.md         — only `@~/.claude/AGENTS.md`
   settings.json     — deny reads of secrets, wires the git guard hook
