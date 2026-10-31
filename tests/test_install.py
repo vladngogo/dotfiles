@@ -26,7 +26,8 @@ class InstallTest(unittest.TestCase):
         # An allowlisted PATH prevents a host Corgi or tree-sitter from masking
         # the fresh-install path, and ensures curl can never reach the network.
         for command in ("bash", "basename", "dirname", "date", "mkdir", "mv",
-                        "ln", "rm", "readlink", "install", "cat", "chmod", "mktemp"):
+                        "ln", "rm", "readlink", "install", "cat", "chmod", "mktemp",
+                        "python3"):
             (self.bin / command).symlink_to(shutil.which(command))
         for command in ("sha256sum", "shasum"):
             if path := shutil.which(command):
@@ -103,10 +104,63 @@ exit "${FAKE_CURL_FAIL:-0}"
         self.assertFalse(self.viewer.is_symlink())
         self.assertEqual(self.viewer.stat().st_mode & 0o777, 0o600)
         for target, source in ((".config/nvim/init.lua", "nvim/init.lua"),
-                               (".claude/settings.json", "claude/settings.json"),
                                (".codex/AGENTS.md", "agents/AGENTS.md")):
             self.assertEqual((self.home / target).resolve(), ROOT / source)
+        settings = self.home / ".claude/settings.json"
+        self.assertFalse(settings.is_symlink())
+        self.assertEqual(json.loads(settings.read_text()), self.repo_settings())
         self.assertFalse((self.home / ".tmux.conf").is_symlink())
+
+    def repo_settings(self):
+        return json.loads((ROOT / "claude/settings.json").read_text())
+
+    def test_settings_merge_keeps_local_entries_and_is_idempotent(self):
+        self.executable(self.launcher)
+        settings = self.home / ".claude/settings.json"
+        settings.parent.mkdir(parents=True)
+        corgi = {"hooks": [{"type": "command", "command": "corgi hook claude"}]}
+        repo = self.repo_settings()
+        shared_deny = repo["permissions"]["deny"][0]
+        settings.write_text(json.dumps({
+            "theme": "auto",
+            "permissions": {"deny": [shared_deny, "Read(~/local-only)"]},
+            "hooks": {"PreToolUse": [corgi], "Stop": [corgi]},
+        }))
+        settings.chmod(0o644)
+        self.run_install()
+        merged = json.loads(settings.read_text())
+        self.assertEqual(merged["theme"], "auto")
+        self.assertEqual(merged["hooks"]["Stop"], [corgi])
+        self.assertEqual(merged["hooks"]["PreToolUse"],
+                         [corgi] + repo["hooks"]["PreToolUse"])
+        deny = merged["permissions"]["deny"]
+        self.assertEqual(deny[:2], [shared_deny, "Read(~/local-only)"])
+        self.assertEqual(len(deny), len(set(deny)))
+        self.assertTrue(set(repo["permissions"]["deny"]) <= set(deny))
+        self.assertEqual(settings.stat().st_mode & 0o777, 0o644)
+        first = settings.read_text()
+        self.run_install()
+        self.assertEqual(settings.read_text(), first)
+        self.assertFalse(list(settings.parent.glob("*.bak.*")))
+        self.assertFalse(list(settings.parent.glob(".settings.json.*")))
+
+    def test_settings_link_from_old_installer_becomes_a_copy(self):
+        self.executable(self.launcher)
+        settings = self.home / ".claude/settings.json"
+        settings.parent.mkdir(parents=True)
+        settings.symlink_to(self.dotfiles / "claude/settings.json")
+        self.run_install()
+        self.assertFalse(settings.is_symlink())
+        self.assertEqual(json.loads(settings.read_text()), self.repo_settings())
+
+    def test_invalid_settings_stop_install_untouched(self):
+        self.executable(self.launcher)
+        settings = self.home / ".claude/settings.json"
+        settings.parent.mkdir(parents=True)
+        settings.write_text("{not json")
+        result = self.run_install(success=False)
+        self.assertIn("not valid JSON", result.stderr)
+        self.assertEqual(settings.read_text(), "{not json")
 
     def test_existing_corgi_on_path_skips_download(self):
         self.executable(self.bin / "corgi")

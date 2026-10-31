@@ -91,6 +91,7 @@ agents/             — tool-agnostic agent config (the source of truth)
 claude/             — thin Claude Code adapter
   CLAUDE.md         — only `@~/.claude/AGENTS.md`
   settings.json     — deny reads of secrets, wires the git guard hook
+  merge-settings    — merge settings.json into ~/.claude/settings.json (install.sh)
 ```
 
 ### Agents
@@ -114,8 +115,11 @@ hides the link with `.git/info/exclude`, so the team's `.gitignore` is untouched
 
 `install.sh` links individual items into `~/.claude/` and `~/.codex/`, never
 the whole directory, because those also hold credentials and session history.
-Claude Code writes to `settings.json` when you change settings via `/config`;
-those edits land in this repo as diffs.
+`settings.json` is the exception: Claude Code (`/config`) and Corgi rewrite it,
+so `claude/merge-settings` adds the repo's deny rules and hooks to the local
+file instead, keeping everything already there. To share a new setting, add it
+to `claude/settings.json` and re-run `install.sh`; removing one from the repo
+does not remove it locally.
 
 Skills go stale as models improve. Before adding one, check the model doesn't
 already do the task well without it, and prune ones that no longer earn their
