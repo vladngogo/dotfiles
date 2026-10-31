@@ -117,7 +117,9 @@ def check_push(git_dir: str | None, args: list[str]) -> str | None:
             continue
         positional.append(a)
 
-    refspecs = positional[1:]  # positional[0] is the remote
+    # positional[0] is the remote: git gives it priority over --repo, so a
+    # lone positional is the repository, never a refspec.
+    refspecs = positional[1:]
     branch = None
 
     def branch_now() -> str:

@@ -39,6 +39,11 @@ CASES = [
     ("git push --force-with-lease origin feat", False, False),
     ("git push --force-with-lease --force-if-includes origin feat", False, False),
     ("git push -o ci.skip origin feat", False, False),
+    # git treats the first positional as the repository even with --repo, so
+    # `--repo origin main` pushes to a repo named "main" and fails harmlessly.
+    ("git push --repo origin main", True, False),  # main: bare-push rule
+    ("git push --repo origin origin main", True, True),
+    ("git push --repo=origin origin +main", True, True),
     # everything at once
     ("git push --all origin", True, True),
     ("git push --mirror origin", True, True),
