@@ -96,7 +96,9 @@ AGENTS_SRC="$DOTFILES/agents"
 CLAUDE_DIR="$HOME/.claude"
 link "$AGENTS_SRC/AGENTS.md" "$CLAUDE_DIR/AGENTS.md"
 link "$DOTFILES/claude/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
-link "$DOTFILES/claude/settings.json" "$CLAUDE_DIR/settings.json"
+# Claude Code and Corgi rewrite settings.json, so merge the repo's entries into
+# the local file instead of linking it.
+python3 "$DOTFILES/claude/merge-settings" "$DOTFILES/claude/settings.json" "$CLAUDE_DIR/settings.json"
 for skill in "$AGENTS_SRC"/skills/*/; do
     skill="${skill%/}"
     link "$skill" "$CLAUDE_DIR/skills/$(basename "$skill")"
