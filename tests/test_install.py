@@ -153,6 +153,31 @@ exit "${FAKE_CURL_FAIL:-0}"
         self.assertFalse(settings.is_symlink())
         self.assertEqual(json.loads(settings.read_text()), self.repo_settings())
 
+    def test_settings_merge_keys_hooks_by_command(self):
+        self.executable(self.launcher)
+        settings = self.home / ".claude/settings.json"
+        settings.parent.mkdir(parents=True)
+        guard = self.repo_settings()["hooks"]["PreToolUse"][0]["hooks"][0]
+        mine = {"type": "command", "command": "my-check"}
+        # The guard already runs, regrouped under a different matcher.
+        regrouped = {"matcher": "Bash|Edit", "hooks": [mine, guard]}
+        settings.write_text(json.dumps({"hooks": {"PreToolUse": [regrouped]}}))
+        self.run_install()
+        merged = json.loads(settings.read_text())
+        self.assertEqual(merged["hooks"]["PreToolUse"], [regrouped])
+
+    def test_settings_symlink_elsewhere_stops_install_untouched(self):
+        self.executable(self.launcher)
+        settings = self.home / ".claude/settings.json"
+        settings.parent.mkdir(parents=True)
+        elsewhere = self.home / "my-settings.json"
+        elsewhere.write_text('{"theme": "dark"}\n')
+        settings.symlink_to(elsewhere)
+        result = self.run_install(success=False)
+        self.assertIn("symlink to somewhere else", result.stderr)
+        self.assertEqual(os.readlink(settings), str(elsewhere))
+        self.assertEqual(elsewhere.read_text(), '{"theme": "dark"}\n')
+
     def test_invalid_settings_stop_install_untouched(self):
         self.executable(self.launcher)
         settings = self.home / ".claude/settings.json"

@@ -119,7 +119,8 @@ the whole directory, because those also hold credentials and session history.
 so `claude/merge-settings` adds the repo's deny rules and hooks to the local
 file instead, keeping everything already there. To share a new setting, add it
 to `claude/settings.json` and re-run `install.sh`; removing one from the repo
-does not remove it locally.
+does not remove it locally, and a repo hook deleted locally comes back on the
+next install (remove it from the repo to opt out).
 
 Skills go stale as models improve. Before adding one, check the model doesn't
 already do the task well without it, and prune ones that no longer earn their

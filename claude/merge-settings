@@ -5,7 +5,9 @@
 
 The target stays a local file because Claude Code (/config) and Corgi rewrite
 it. Objects merge recursively, lists gain only the items they lack, and scalars
-the target already has win. Nothing is removed, so re-running changes nothing.
+the target already has win. Hooks are keyed by command per event, so a repo
+hook is added once however the local file groups it. Nothing is removed, so
+re-running changes nothing.
 """
 import json
 import os
@@ -20,6 +22,20 @@ def merge(target, source):
         return target
     if isinstance(target, list) and isinstance(source, list):
         return target + [item for item in source if item not in target]
+    return target
+
+
+def merge_hooks(target, source):
+    # Comparing whole matcher groups would duplicate a repo hook whenever the
+    # local file groups it differently, so compare the commands themselves.
+    for event, groups in source.items():
+        existing = target.setdefault(event, [])
+        present = {hook.get("command") for group in existing for hook in group.get("hooks", [])}
+        for group in groups:
+            missing = [hook for hook in group.get("hooks", []) if hook.get("command") not in present]
+            if missing:
+                existing.append({**group, "hooks": missing})
+                present.update(hook.get("command") for hook in missing)
     return target
 
 
@@ -42,7 +58,11 @@ def main(source_path, target_path):
             except json.JSONDecodeError as e:
                 sys.exit(f"{target_path} is not valid JSON ({e}); fix it and re-run.")
 
-    merged = merge(json.loads(json.dumps(current)), source)
+    merged = json.loads(json.dumps(current))
+    hooks = source.pop("hooks", {})
+    merged = merge(merged, source)
+    if hooks:
+        merged["hooks"] = merge_hooks(merged.get("hooks", {}), hooks)
     if os.path.exists(target_path) and merged == current:
         print(f"{target_path} already has the repo settings")
         return
