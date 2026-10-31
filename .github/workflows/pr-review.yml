@@ -35,15 +35,25 @@ jobs:
       - name: Fetch base branch
         run: git fetch --depth=1 origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
 
+      # Earlier threads are loaded here, not via a reviewer tool, so the
+      # reviewer needs no API access beyond posting comments.
       - name: Build prompt
         id: prompt
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          threads="$(.github/scripts/review-threads.sh "${{ github.repository_owner }}" \
+            "${{ github.event.repository.name }}" "${{ github.event.pull_request.number }}")"
           {
             echo "text<<PROMPT_EOF"
             echo "REPO: ${{ github.repository }}"
             echo "PR NUMBER: ${{ github.event.pull_request.number }}"
             echo
             cat .github/review-prompt.md
+            echo
+            echo "## Earlier review threads on this PR"
+            echo
+            echo "$threads"
             echo "PROMPT_EOF"
           } >> "$GITHUB_OUTPUT"
 

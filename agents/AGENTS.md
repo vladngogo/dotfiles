@@ -35,3 +35,13 @@ Applies in every repo. A repo's own `AGENTS.md` overrides anything here.
 - Hard rules belong in tools, hooks, or CI, not only in prose. If a rule here
   matters enough to never break, it should also be enforced somewhere.
 - Never commit secrets, credentials, or machine-specific paths.
+
+## Responding to review
+
+- Fixed as suggested: don't reply; resolve the thread. The commit shows the fix.
+- Declined, partly fixed, or fixed differently: reply in the thread with the
+  reason, then resolve it. The reply is the decision record.
+- Reviewer was wrong: reply with the evidence (a test, a counter-example), then
+  resolve.
+- Never resolve a thread you didn't address. One reply per thread; no
+  "thanks" or restating the comment.
