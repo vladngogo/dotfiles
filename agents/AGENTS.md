@@ -4,8 +4,8 @@ Applies in every repo. A repo's own `AGENTS.md` overrides anything here.
 
 ## Environment
 
-- Windows 11 desktop; development happens in WSL (Ubuntu). Other machines vary,
-  so check `uname` before assuming paths or package managers.
+- Linux (Pop!_OS, apt-based). Other machines vary, so check `uname` before
+  assuming paths or package managers.
 - Primary languages: Python and SQL.
 
 ## How I work
