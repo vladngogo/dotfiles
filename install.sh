@@ -32,6 +32,45 @@ backup "$TMUX_TARGET"
 ln -sf "$DOTFILES/tmux/tmux.conf" "$TMUX_TARGET"
 echo "Linked $TMUX_TARGET → $DOTFILES/tmux/tmux.conf"
 
+# ── agents (tool-agnostic) ────────────────────────────────────
+# agents/ holds instructions, skills and hooks that any agent can use. Each
+# tool gets per-item links, never a link to its whole config dir: those dirs
+# also hold credentials, history and session state that must stay local.
+link() {
+    local src="$1" target="$2"
+    mkdir -p "$(dirname "$target")"
+    backup "$target"
+    ln -sfn "$src" "$target"
+    echo "Linked $target → $src"
+}
+
+AGENTS_SRC="$DOTFILES/agents"
+
+# Claude Code: CLAUDE.md just imports AGENTS.md so the content stays generic.
+CLAUDE_DIR="$HOME/.claude"
+link "$AGENTS_SRC/AGENTS.md" "$CLAUDE_DIR/AGENTS.md"
+link "$DOTFILES/claude/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
+link "$DOTFILES/claude/settings.json" "$CLAUDE_DIR/settings.json"
+for skill in "$AGENTS_SRC"/skills/*/; do
+    skill="${skill%/}"
+    link "$skill" "$CLAUDE_DIR/skills/$(basename "$skill")"
+done
+for hook in "$AGENTS_SRC"/hooks/*; do
+    link "$hook" "$CLAUDE_DIR/hooks/$(basename "$hook")"
+done
+
+for bin in "$AGENTS_SRC"/bin/*; do
+    link "$bin" "$HOME/.local/bin/$(basename "$bin")"
+done
+case ":$PATH:" in
+    *":$HOME/.local/bin:"*) ;;
+    *) echo "WARNING: ~/.local/bin is not on PATH — agent-eval won't be found." ;;
+esac
+
+# Codex reads ~/.codex/AGENTS.md directly.
+link "$AGENTS_SRC/AGENTS.md" "$HOME/.codex/AGENTS.md"
+
+
 # ── treesitter prerequisites ──────────────────────────────────
 # nvim-treesitter (main branch) shells out to `tree-sitter build` for every
 # parser, so a matching CLI must exist before nvim first starts. These are

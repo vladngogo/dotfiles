@@ -48,7 +48,50 @@ nvim/
   lazy-lock.json    — plugin lockfile
 tmux/
   tmux.conf         — tmux config (Ctrl-a prefix, vim keys, tokyonight theme)
+agents/             — tool-agnostic agent config (the source of truth)
+  AGENTS.md         — global instructions, linked for every agent tool
+  skills/<name>/    — SKILL.md skills (build-evals, fold-or-keep)
+  hooks/guard-bash  — blocks pushes to main/master, force pushes, and credential-path access
+  bin/agent-eval    — eval loop: run cases in parallel worktrees, grade, compare (→ ~/.local/bin)
+  bin/agent-link    — attach repos/<repo>.md to a repo as CLAUDE.local.md, uncommitted
+  repos/<repo>.md   — personal notes for one repo
+  tests/            — `python3 -m unittest discover -s agents/tests`
+claude/             — thin Claude Code adapter
+  CLAUDE.md         — only `@~/.claude/AGENTS.md`
+  settings.json     — deny reads of secrets, wires the git guard hook
 ```
+
+### Agents
+
+Write anything generic in `agents/`; per-tool directories stay thin adapters.
+Instructions come in three layers:
+
+| Layer | Where | Committed to the repo? |
+|---|---|---|
+| Personal, every repo | `agents/AGENTS.md` → `~/.claude/CLAUDE.md` | no |
+| Team, one repo | that repo's `AGENTS.md` (+ `CLAUDE.md` containing `@AGENTS.md`) | yes |
+| Personal, one repo | `agents/repos/<repo>.md` → `CLAUDE.local.md` via `agent-link` | no |
+
+Test for where a line goes: would a teammate on a different OS, who's never
+seen your setup, get worse results without it? Then it's the repo's. If it
+would be wrong or irrelevant for them, it's personal. Rules that must never
+break go in CODEOWNERS, branch protection, hooks or CI, not only in prose.
+
+Run `agent-link --init` in a fresh clone to attach (or create) your notes. It
+hides the link with `.git/info/exclude`, so the team's `.gitignore` is untouched.
+
+`install.sh` links individual items into `~/.claude/` and `~/.codex/`, never
+the whole directory, because those also hold credentials and session history.
+Claude Code writes to `settings.json` when you change settings via `/config`;
+those edits land in this repo as diffs.
+
+Skills go stale as models improve. Before adding one, check the model doesn't
+already do the task well without it, and prune ones that no longer earn their
+place.
+
+`guard-bash` and the `settings.json` deny rules stop *accidents*, not a determined
+agent: a script or `eval` can hide any command. Server-side branch protection
+and a sandbox are the real boundaries.
 
 ---
 

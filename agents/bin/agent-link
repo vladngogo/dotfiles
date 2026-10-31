@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# agent-link — attach your personal per-repo agent notes to the current repo
+# without committing them.
+#
+#   agent-link            link agents/repos/<repo>.md → <repo>/CLAUDE.local.md
+#   agent-link --init     same, creating the notes file in dotfiles if missing
+#   agent-link --unlink   remove the link (the notes stay in dotfiles)
+#
+# <repo> is the origin remote's name (so every clone and worktree shares one
+# notes file), falling back to the checkout's directory name. The link is
+# hidden with .git/info/exclude, a per-clone ignore list that is never
+# committed, so the team repo is untouched.
+set -euo pipefail
+
+LINK_NAME="CLAUDE.local.md"
+
+die() { echo "agent-link: $*" >&2; exit 1; }
+
+mode="link"
+case "${1:-}" in
+    "") ;;
+    --init) mode="init" ;;
+    --unlink) mode="unlink" ;;
+    -h|--help) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) die "unknown option: $1 (try --help)" ;;
+esac
+
+if [ -z "${DOTFILES:-}" ]; then
+    script="$(readlink -f "$0" 2>/dev/null || echo "$0")"
+    DOTFILES="$(cd "$(dirname "$script")/../.." && pwd)"
+fi
+REPOS_DIR="$DOTFILES/agents/repos"
+
+root="$(git rev-parse --show-toplevel 2>/dev/null)" || die "not inside a git repo"
+url="$(git -C "$root" remote get-url origin 2>/dev/null || true)"
+if [ -n "$url" ]; then
+    name="$(basename "${url%/}" .git)"
+else
+    name="$(basename "$root")"
+fi
+
+notes="$REPOS_DIR/$name.md"
+link="$root/$LINK_NAME"
+exclude="$(git -C "$root" rev-parse --git-path info/exclude)"
+case "$exclude" in /*) ;; *) exclude="$root/$exclude" ;; esac
+
+if [ "$mode" = "unlink" ]; then
+    if [ -L "$link" ] && [ "$(readlink "$link")" = "$notes" ]; then
+        rm "$link"
+        echo "Unlinked $link (notes kept at $notes)"
+    else
+        echo "No agent-link symlink at $link; nothing to do."
+    fi
+    exit 0
+fi
+
+if git -C "$root" ls-files --error-unmatch "$LINK_NAME" >/dev/null 2>&1; then
+    die "$LINK_NAME is committed in this repo; it's team-owned, not personal. Leaving it alone."
+fi
+
+if [ ! -f "$notes" ]; then
+    [ "$mode" = "init" ] || die "no notes for '$name' at $notes (run with --init to create them)"
+    mkdir -p "$REPOS_DIR"
+    cat > "$notes" <<EOF
+# Personal notes: $name
+
+Only for me, only in this repo. Team-relevant facts belong in the repo's
+AGENTS.md; preferences for every repo belong in agents/AGENTS.md.
+EOF
+    echo "Created $notes (commit it in dotfiles)"
+fi
+
+if [ -L "$link" ]; then
+    if [ "$(readlink "$link")" != "$notes" ]; then
+        die "$link links to $(readlink "$link"), not $notes. Remove it first."
+    fi
+elif [ -e "$link" ]; then
+    die "$link already exists as a regular file. Move its contents into $notes, delete it, and rerun."
+else
+    ln -s "$notes" "$link"
+fi
+echo "Linked $link → $notes"
+
+mkdir -p "$(dirname "$exclude")"
+touch "$exclude"
+if ! grep -qxF "/$LINK_NAME" "$exclude"; then
+    printf '/%s\n' "$LINK_NAME" >> "$exclude"
+    echo "Excluded /$LINK_NAME via $exclude"
+fi

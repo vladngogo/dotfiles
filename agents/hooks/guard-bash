@@ -1,0 +1,186 @@
+#!/usr/bin/env python3
+"""guard-bash — refuse risky shell commands issued by an agent.
+
+1. git pushes that write to main/master, force-push, or push every branch.
+2. Commands that touch credential files (~/.ssh, ~/.aws, gh config, .env).
+
+Input: a shell command as argv[1], or a Claude Code PreToolUse JSON payload on
+stdin (tool_input.command). Exit 2 blocks; the stderr message is shown to the
+agent so it can adjust.
+
+The command is tokenized like a shell would (quotes, ;, &&, ||, |) and each
+`git ... push` is checked by resolving the destination of every refspec, so
+`+main`, `refs/heads/main`, `HEAD:main`, `:main` and `-uf` are all caught.
+
+This prevents accidents, not a determined adversary: anything that hides the
+command (scripts, aliases, eval, base64) is invisible, and the current branch
+is read from `git -C <dir>` or the hook's cwd, so `cd other && git push` is
+judged against the cwd's branch. Pair with server-side branch protection, and
+use a sandbox if the agent itself is untrusted.
+"""
+from __future__ import annotations
+
+import json
+import re
+import shlex
+import subprocess
+import sys
+
+SECRET_PATTERNS = [
+    re.compile(r"(^|[/~=])\.ssh(/|$)"),
+    re.compile(r"(^|[/~=])\.aws(/|$)"),
+    re.compile(r"(^|/)\.config/gh(/|$)"),
+    re.compile(r"(^|/)\.env(\.[^/]*)?$"),
+]
+SECRET_ALLOWED = re.compile(r"\.env\.(example|sample|template|dist)$")
+
+PROTECTED = {"main", "master"}
+SEPARATORS = {";", "&&", "||", "|", "&", "(", ")", "\n"}
+GIT_OPTS_WITH_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace"}
+PUSH_OPTS_WITH_VALUE = {"-o", "--push-option", "--repo", "--receive-pack", "--exec"}
+PUSH_ALL = {"--all", "--mirror", "--branches"}
+
+
+def tokenize(cmd: str) -> list[str]:
+    lex = shlex.shlex(cmd, posix=True, punctuation_chars=True)
+    lex.whitespace_split = True
+    try:
+        return list(lex)
+    except ValueError:  # unbalanced quotes: fall back to a plain split
+        return cmd.split()
+
+
+def segments(tokens: list[str]) -> list[list[str]]:
+    out, cur = [], []
+    for t in tokens:
+        if t in SEPARATORS:
+            if cur:
+                out.append(cur)
+            cur = []
+        else:
+            cur.append(t)
+    if cur:
+        out.append(cur)
+    return out
+
+
+def current_branch(git_dir: str | None) -> str:
+    cmd = ["git"] + (["-C", git_dir] if git_dir else []) + ["rev-parse", "--abbrev-ref", "HEAD"]
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
+    except OSError:
+        return ""
+
+
+def parse_git(seg: list[str]) -> tuple[str | None, list[str]] | None:
+    """Return (dir from -C, push args) if this segment is a git push."""
+    if "git" not in seg:
+        return None
+    i = seg.index("git") + 1
+    git_dir = None
+    while i < len(seg) and seg[i].startswith("-"):
+        opt = seg[i]
+        if opt in GIT_OPTS_WITH_VALUE:
+            if opt == "-C" and i + 1 < len(seg):
+                git_dir = seg[i + 1]
+            i += 2
+        else:
+            i += 1
+    if i < len(seg) and seg[i] == "push":
+        return git_dir, seg[i + 1:]
+    return None
+
+
+def check_push(git_dir: str | None, args: list[str]) -> str | None:
+    positional: list[str] = []
+    skip = False
+    tags_only = False
+    for a in args:
+        if skip:
+            skip = False
+            continue
+        if a in PUSH_OPTS_WITH_VALUE:
+            skip = True
+            continue
+        if a.startswith("--"):
+            name = a.split("=", 1)[0]
+            if name == "--force":
+                return "force push. Use --force-with-lease, and only on your own branch."
+            if name in PUSH_ALL:
+                return f"{name} pushes every branch, including main/master."
+            if name == "--tags":
+                tags_only = True
+            continue
+        if a.startswith("-") and len(a) > 1:
+            if "f" in a[1:]:
+                return "force push. Use --force-with-lease, and only on your own branch."
+            continue
+        positional.append(a)
+
+    # positional[0] is the remote: git gives it priority over --repo, so a
+    # lone positional is the repository, never a refspec.
+    refspecs = positional[1:]
+    branch = None
+
+    def branch_now() -> str:
+        nonlocal branch
+        if branch is None:
+            branch = current_branch(git_dir)
+        return branch
+
+    if not refspecs:
+        if not tags_only and branch_now() in PROTECTED:
+            return f"current branch is {branch_now()}. Create a feature branch before pushing."
+        return None
+
+    for spec in refspecs:
+        if spec.startswith("+"):
+            return f"force push via '{spec}'. Use --force-with-lease, and only on your own branch."
+        dst = spec.split(":", 1)[1] if ":" in spec else spec
+        if dst in ("HEAD", "@"):
+            dst = branch_now()
+        dst = dst.removeprefix("refs/heads/")
+        if dst in PROTECTED:
+            return f"'{spec}' writes to {dst}. Push a feature branch and open a PR."
+    return None
+
+
+def check_secrets(tokens: list[str]) -> str | None:
+    for t in tokens:
+        for word in re.split(r"[<>]", t):
+            if word and not SECRET_ALLOWED.search(word) and any(p.search(word) for p in SECRET_PATTERNS):
+                return f"'{word}' looks like a credential path. Ask the user instead of reading it."
+    return None
+
+
+def check(cmd: str) -> str | None:
+    tokens = tokenize(cmd)
+    reason = check_secrets(tokens)
+    if reason:
+        return reason
+    for seg in segments(tokens):
+        parsed = parse_git(seg)
+        if parsed:
+            reason = check_push(*parsed)
+            if reason:
+                return reason
+    return None
+
+
+def main() -> int:
+    if len(sys.argv) > 1:
+        cmd = sys.argv[1]
+    else:
+        try:
+            cmd = json.load(sys.stdin).get("tool_input", {}).get("command", "")
+        except (json.JSONDecodeError, AttributeError):
+            return 0
+    reason = check(cmd or "")
+    if reason:
+        print(f"Blocked: {reason}", file=sys.stderr)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
