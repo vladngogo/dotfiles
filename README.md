@@ -24,8 +24,8 @@ Corgi's native theme and shortcuts with a Ctrl-a prefix for terminals and agents
   `xclip`/`xsel` (X11). Neovim autodetects whichever is installed.
 - **macOS Apple Silicon, Linux amd64/arm64, or WSL** for Corgi's official
   binaries. `install.sh` installs Corgi when it is missing using its
-  [official installer](https://corgi.computer/install.sh), which requires `curl`
-  and `sha256sum` or `shasum`.
+  [official installer](https://corgi.computer/install.sh), pinned to a release and
+  SHA-256 checksum before execution. This requires `curl` and `sha256sum` or `shasum`.
 
 `install.sh` warns if the tree-sitter CLI is missing, too old, or built for the wrong
 architecture, but does not install it for you.
@@ -67,6 +67,9 @@ to `corgi` too.
 Corgi normally installs its launcher at `~/.local/bin/corgi`. Ensure
 `~/.local/bin` is on PATH (open a new shell after the upstream installer updates
 your shell configuration). Run `corgi update` to update an existing installation.
+Fresh installations bootstrap release `20261030T200700Z-f539bbadd798`. To bump
+that baseline, review the new versioned `releases/<version>/install.sh`, update
+both `version` and `expected` in `install_corgi()`, and rerun the checks below.
 
 ## Structure
 

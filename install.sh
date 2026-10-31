@@ -16,10 +16,35 @@ backup() {
 }
 
 # ── corgi ─────────────────────────────────────────────────────
+install_corgi() (
+    # Pin both the release URL and the script bytes before executing upstream code.
+    local version="20261030T200700Z-f539bbadd798"
+    local expected="f839bd299f8846d274acfdd08ddcc2dc10acf068be745f119976f56c572660f5"
+    local tmp actual
+    tmp="$(mktemp -d)"
+    trap 'rm -rf "$tmp"' EXIT
+    curl --disable -fsSL --proto '=https' --proto-redir '=https' \
+        --connect-timeout 10 --max-time 60 \
+        "https://corgi.computer/releases/$version/install.sh" -o "$tmp/install.sh"
+    if command -v sha256sum >/dev/null 2>&1; then
+        actual="$(sha256sum "$tmp/install.sh")"
+    elif command -v shasum >/dev/null 2>&1; then
+        actual="$(shasum -a 256 "$tmp/install.sh")"
+    else
+        echo "Corgi installation requires sha256sum or shasum." >&2
+        exit 1
+    fi
+    if [ "${actual%% *}" != "$expected" ]; then
+        echo "Corgi installer checksum mismatch; refusing to execute it." >&2
+        exit 1
+    fi
+    # Plain output also disables the upstream installer's interactive launch.
+    TERM=dumb bash "$tmp/install.sh"
+)
+
 if ! command -v corgi >/dev/null 2>&1 && [ ! -x "${CORGI_INSTALL_BIN:-$HOME/.local/bin/corgi}" ]; then
     echo "Installing Corgi…"
-    # Plain output also disables the upstream installer's interactive launch.
-    curl -fsSL https://corgi.computer/install.sh | TERM=dumb bash
+    install_corgi
 else
     echo "Corgi already installed"
 fi
