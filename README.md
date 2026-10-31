@@ -48,7 +48,29 @@ nvim/
   lazy-lock.json    — plugin lockfile
 tmux/
   tmux.conf         — tmux config (Ctrl-a prefix, vim keys, tokyonight theme)
+agents/             — tool-agnostic agent config (the source of truth)
+  AGENTS.md         — global instructions, linked for every agent tool
+  skills/<name>/    — SKILL.md skills (build-evals, fold-or-keep)
+  hooks/            — guard scripts (guard-git.sh blocks pushes to main, force pushes)
+claude/             — thin Claude Code adapter
+  CLAUDE.md         — only `@~/.claude/AGENTS.md`
+  settings.json     — deny reads of secrets, wires the git guard hook
 ```
+
+### Agents
+
+Write anything generic in `agents/`; per-tool directories stay thin adapters.
+Project-specific rules (gated paths, ports, migrations) belong in that repo's
+own `AGENTS.md`, not here.
+
+`install.sh` links individual items into `~/.claude/` and `~/.codex/`, never
+the whole directory, because those also hold credentials and session history.
+Claude Code writes to `settings.json` when you change settings via `/config`;
+those edits land in this repo as diffs.
+
+Skills go stale as models improve. Before adding one, check the model doesn't
+already do the task well without it, and prune ones that no longer earn their
+place. The hook needs `jq`.
 
 ---
 
