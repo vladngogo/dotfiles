@@ -1,8 +1,8 @@
 name: pr-review
 
-# Automated PR review. Runs once when a PR is opened (or leaves draft / is
-# reopened). Add `synchronize` to `types` to re-review on every push; that
-# costs a review per push.
+# Automated PR review. Runs when a PR is opened, leaves draft, is reopened,
+# and on every push to it (one paid review per push; a newer push cancels an
+# in-flight review via `concurrency`).
 #
 # Provider: DeepSeek, through its Anthropic-compatible endpoint, driving
 # claude-code-action. Instructions live in .github/review-prompt.md, so the
@@ -11,7 +11,7 @@ name: pr-review
 #   - OpenAI: replace this step with openai/codex-action plus `gh pr comment`.
 on:
   pull_request:
-    types: [opened, ready_for_review, reopened]
+    types: [opened, synchronize, ready_for_review, reopened]
 
 concurrency:
   group: pr-review-${{ github.event.pull_request.number }}
