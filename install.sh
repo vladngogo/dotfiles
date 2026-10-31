@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — symlink dotfiles into place
+# install.sh — install Corgi and put dotfiles into place
 set -euo pipefail
 
 DOTFILES="$(cd "$(dirname "$0")" && pwd)"
@@ -15,6 +15,33 @@ backup() {
     fi
 }
 
+# ── corgi ─────────────────────────────────────────────────────
+if ! command -v corgi >/dev/null 2>&1 && [ ! -x "${CORGI_INSTALL_BIN:-$HOME/.local/bin/corgi}" ]; then
+    echo "Installing Corgi…"
+    # Plain output also disables the upstream installer's interactive launch.
+    curl -fsSL https://corgi.computer/install.sh | TERM=dumb bash
+else
+    echo "Corgi already installed"
+fi
+
+# Corgi rewrites viewer.json atomically, so seed it rather than symlinking it.
+# Keep existing preferences (and all runtime/session state) on subsequent runs.
+CORGI_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/corgi"
+CORGI_VIEWER="$CORGI_STATE_DIR/viewer.json"
+if [ ! -e "$CORGI_VIEWER" ] && [ ! -L "$CORGI_VIEWER" ]; then
+    mkdir -p "$CORGI_STATE_DIR"
+    install -m 600 "$DOTFILES/corgi/viewer.json" "$CORGI_VIEWER"
+    echo "Seeded $CORGI_VIEWER ← $DOTFILES/corgi/viewer.json"
+else
+    echo "Keeping existing $CORGI_VIEWER"
+fi
+
+# Retire only the link created by this repo's old installer, even if dangling.
+if [ -L "$HOME/.tmux.conf" ] && [ "$(readlink "$HOME/.tmux.conf")" = "$DOTFILES/tmux/tmux.conf" ]; then
+    rm "$HOME/.tmux.conf"
+    echo "Removed legacy dotfiles link $HOME/.tmux.conf"
+fi
+
 # ── nvim ──────────────────────────────────────────────────────
 NVIM_DIR="$HOME/.config/nvim"
 mkdir -p "$NVIM_DIR"
@@ -25,12 +52,6 @@ for f in init.lua lazy-lock.json; do
     ln -sf "$DOTFILES/nvim/$f" "$target"
     echo "Linked $target → $DOTFILES/nvim/$f"
 done
-
-# ── tmux ──────────────────────────────────────────────────────
-TMUX_TARGET="$HOME/.tmux.conf"
-backup "$TMUX_TARGET"
-ln -sf "$DOTFILES/tmux/tmux.conf" "$TMUX_TARGET"
-echo "Linked $TMUX_TARGET → $DOTFILES/tmux/tmux.conf"
 
 # ── agents (tool-agnostic) ────────────────────────────────────
 # agents/ holds instructions, skills and hooks that any agent can use. Each
@@ -64,7 +85,7 @@ for bin in "$AGENTS_SRC"/bin/*; do
 done
 case ":$PATH:" in
     *":$HOME/.local/bin:"*) ;;
-    *) echo "WARNING: ~/.local/bin is not on PATH — agent-eval won't be found." ;;
+    *) echo "WARNING: ~/.local/bin is not on PATH — add it to run corgi and the agent tools." ;;
 esac
 
 # Codex reads ~/.codex/AGENTS.md directly.
@@ -119,7 +140,7 @@ else
 fi
 
 echo ""
-echo "Done! Restart tmux and nvim to pick up changes."
+echo "Done! Run corgi in your project directory; restart nvim to pick up changes."
 echo ""
 echo "On a new machine nvim auto-installs parsers on first launch. If highlighting"
 echo "is missing, run :checkhealth vim.treesitter and :TSUpdate."

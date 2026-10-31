@@ -1,0 +1,6 @@
+{
+  "preset": "corgi",
+  "prefix": "ctrl_a",
+  "theme": "corgi",
+  "onboarding_complete": false
+}

@@ -1,6 +1,7 @@
 # dotfiles
 
-Portable nvim and tmux configuration. Tokyonight theme across both.
+Portable Neovim and [Corgi](https://corgi.computer/) setup. Tokyonight in Neovim;
+Corgi's native theme and shortcuts with a Ctrl-a prefix for terminals and agents.
 
 ## Requirements
 
@@ -18,14 +19,15 @@ Portable nvim and tmux configuration. Tokyonight theme across both.
   gitsigns delete glyph all render icon codepoints that a regular font doesn't
   have. Without one they show as boxes/tofu instead of icons. Grab one from
   [nerdfonts.com](https://www.nerdfonts.com/) and set it as your terminal's font.
-- **A clipboard tool**, for `unnamedplus`/tmux yank to reach the system
+- **A clipboard tool**, for Neovim's `unnamedplus` to reach the system
   clipboard — `pbcopy` (macOS, built in), `wl-clipboard` (Wayland), or
-  `xclip`/`xsel` (X11). Neovim autodetects whichever is installed; tmux's
-  `tmux.conf` picks one at config-load time (see below).
-- **tmux >= 3.2** — the copy-mode clipboard binding uses `%if`/`%elif` config
-  conditionals, which older tmux versions don't understand.
+  `xclip`/`xsel` (X11). Neovim autodetects whichever is installed.
+- **macOS Apple Silicon, Linux amd64/arm64, or WSL** for Corgi's official
+  binaries. `install.sh` installs Corgi when it is missing using its
+  [official installer](https://corgi.computer/install.sh), which requires `curl`
+  and `sha256sum` or `shasum`.
 
-`install.sh` warns if the CLI is missing, too old, or built for the wrong
+`install.sh` warns if the tree-sitter CLI is missing, too old, or built for the wrong
 architecture, but does not install it for you.
 
 ## Setup
@@ -36,9 +38,35 @@ cd ~/github/dotfiles
 ./install.sh
 ```
 
-The install script symlinks configs into place, backing up any existing files first.
+The install script installs Corgi if needed, seeds its preferences, and symlinks
+the Neovim and agent configs, backing up existing regular files first.
 On first launch nvim installs its plugins and treesitter parsers automatically —
 give it a minute before expecting highlighting to work.
+
+### Corgi setup and migration
+
+Run `corgi` in your project directory. First-run setup starts with the **Corgi**
+shortcut preset and **Ctrl-a** prefix from `corgi/viewer.json`; complete setup to
+keep them. Use `corgi onboard` (or `Ctrl-a i`) to revisit setup and import existing
+tmux or Herdr sessions. Start Corgi in a terminal outside the session being migrated.
+The [import guide](https://github.com/tals/corgi/blob/main/docs/reference.md#set-up-and-import)
+explains layout copies and supported Herdr process handoffs.
+
+Preferences are copied once to `${XDG_STATE_HOME:-$HOME/.local/state}/corgi/viewer.json`.
+Corgi rewrites this file when settings change, so it is a local file rather than
+a symlink. Re-running `install.sh` preserves existing preferences; use setup to
+select **Corgi**, **Ctrl-a**, and the **Corgi** theme on an existing installation.
+Workspace layouts, recovery data and accounts remain local. Changes to the
+tracked defaults apply to fresh installations.
+
+The installer removes `~/.tmux.conf` only when it is the old symlink into this
+checkout. There are no Herdr install scripts or settings tracked in this repo.
+If your shell startup files launch tmux or Herdr automatically, change that command
+to `corgi` too.
+
+Corgi normally installs its launcher at `~/.local/bin/corgi`. Ensure
+`~/.local/bin` is on PATH (open a new shell after the upstream installer updates
+your shell configuration). Run `corgi update` to update an existing installation.
 
 ## Structure
 
@@ -46,8 +74,9 @@ give it a minute before expecting highlighting to work.
 nvim/
   init.lua          — single-file nvim config (lazy.nvim, telescope, gitsigns, lsp, etc.)
   lazy-lock.json    — plugin lockfile
-tmux/
-  tmux.conf         — tmux config (Ctrl-a prefix, vim keys, tokyonight theme)
+corgi/
+  viewer.json       — first-run preferences (Corgi preset/theme, Ctrl-a prefix)
+tests/              — installer regression tests (isolated homes, no network)
 agents/             — tool-agnostic agent config (the source of truth)
   AGENTS.md         — global instructions, linked for every agent tool
   skills/<name>/    — SKILL.md skills (build-evals, fold-or-keep)
@@ -92,6 +121,14 @@ place.
 `guard-bash` and the `settings.json` deny rules stop *accidents*, not a determined
 agent: a script or `eval` can hide any command. Server-side branch protection
 and a sandbox are the real boundaries.
+
+### Checks
+
+```bash
+shellcheck install.sh
+python3 -m unittest discover -s tests -v
+python3 -m unittest discover -s agents/tests -v
+```
 
 ---
 
@@ -157,56 +194,55 @@ Leader key is **Space**.
 
 ---
 
-## Tmux Cheat Sheet
+## Corgi Cheat Sheet
 
-Prefix is **Ctrl-a** (not the default Ctrl-b).
+These shortcuts use the **Corgi** preset with **Ctrl-a** as the prefix. Press and
+release the prefix, then the next key; `Ctrl-a Ctrl-a` sends a literal Ctrl-a.
+`Ctrl-a ?` shows your current keymap; `corgi keys corgi` prints the preset's table.
 
-### Sessions
+### Workspaces and agents
+
+| Key / command | Action |
+|-----|--------|
+| `corgi` | Start or reconnect (shell) |
+| `corgi list` | List workspaces, tabs and panes (shell) |
+| `Ctrl-a N` | New workspace (name and folder) |
+| `Ctrl-a w` | Choose workspace |
+| `Ctrl-a a` | Choose agent |
+| `Ctrl-a g` | Find agent |
+| `F1` / `Ctrl-a f` | Jump to an agent needing attention |
+| `Ctrl-a d` / `Ctrl-a q` | Detach, leaving processes running |
+
+### Tabs and panes
 
 | Key | Action |
 |-----|--------|
-| `tmux new -s name` | New named session (shell) |
-| `tmux a -t name` | Attach to session (shell) |
-| `tmux ls` | List sessions (shell) |
-| `Ctrl-a d` | Detach from session |
-| `Ctrl-a s` | Switch session |
+| `Ctrl-t` / `Ctrl-a c` | New tab: agent or terminal picker |
+| `Ctrl-a p` / `Ctrl-a n` | Previous / next tab |
+| `Ctrl-a 1-9` | Select tab |
+| `Ctrl-a ,` | Rename tab |
+| `Ctrl-a X` | Close tab and its processes |
+| `Ctrl-a v` | Split right |
+| `Ctrl-a -` | Split down |
+| `Ctrl-a h/j/k/l` | Focus left / down / up / right |
+| `Ctrl-a r`, then `h/j/k/l` | Resize pane; another key exits resize mode |
+| `Ctrl-a x` | Close pane and its processes |
+| `Ctrl-a z` | Toggle pane zoom |
+| `Ctrl-a u` | Reopen the last recoverable closed agent |
 
-### Windows
-
-| Key | Action |
-|-----|--------|
-| `Ctrl-a c` | New window |
-| `Alt-h` / `Alt-l` | Previous / next window (no prefix) |
-| `Ctrl-a 1-9` | Jump to window by number |
-| `Ctrl-a ,` | Rename window |
-| `Ctrl-a &` | Close window |
-
-### Panes
+### Copy, review and settings
 
 | Key | Action |
 |-----|--------|
-| `Ctrl-a \|` | Split horizontal |
-| `Ctrl-a -` | Split vertical |
-| `Ctrl-h/j/k/l` | Move between panes (no prefix) |
-| `Ctrl-a H/J/K/L` | Resize pane (5 cells) |
-| `Ctrl-a x` | Close pane |
-| `Ctrl-a z` | Toggle pane zoom (fullscreen) |
-
-### Copy Mode (vi keys)
-
-| Key | Action |
-|-----|--------|
-| `Ctrl-a [` | Enter copy mode |
-| `v` | Begin selection |
-| `Ctrl-v` | Toggle rectangle select |
-| `y` | Yank to clipboard |
-| `q` | Exit copy mode |
-
-### Other
-
-| Key | Action |
-|-----|--------|
-| `Ctrl-a r` | Reload tmux config |
+| `Ctrl-a s` / mouse wheel | Enter scroll / copy mode |
+| `j/k`, `g/G`, PageUp/PageDown | Navigate scrollback |
+| `/`, then `n/N` | Search scrollback, next / previous match |
+| `y` / Enter | Copy in scroll mode |
+| `q` | Exit scroll mode |
+| `Ctrl-a e` | Open / focus / close the review panel |
+| `Ctrl-a b` | Toggle sidebar |
+| `Ctrl-a m` | Mute / unmute sounds |
+| `Ctrl-a i` | Open setup |
 
 ---
 
@@ -215,9 +251,10 @@ Prefix is **Ctrl-a** (not the default Ctrl-b).
 ### Quick project session
 
 ```bash
-tmux new -s myproject
-# opens a new tmux session named "myproject"
-# Ctrl-a | to split, then open nvim on one side
+cd ~/github/myproject
+corgi
+# Ctrl-a v to split right, then open nvim on one side
+# Ctrl-a d to detach; run corgi again to reconnect
 ```
 
 ### Fuzzy find + jump to definition
@@ -243,27 +280,27 @@ tmux new -s myproject
 ### Multi-pane dev layout
 
 ```bash
-# Terminal: start a session, split into 3 panes
-tmux new -s dev
-# Ctrl-a | → vertical split (editor | terminal)
-# Ctrl-a - → horizontal split the right pane (terminal on top, logs on bottom)
-# Ctrl-h/j/k/l to move between them
+# Terminal: start Corgi, split into 3 panes
+corgi
+# Ctrl-a v → split right (editor | terminal)
+# Ctrl-a - → split down in the right pane (terminal on top, logs on bottom)
+# Ctrl-a h/j/k/l to move between panes; Ctrl-h/j/k/l for Neovim splits
 ```
 
 ---
 
 ## Tips and Tricks
 
-- **System clipboard works everywhere** — nvim uses `unnamedplus`, tmux yanks pipe to `pbcopy`/`wl-copy`/`xclip` depending on platform. Copy in one, paste in the other.
-- **Mouse is on** in tmux — click to select panes, scroll to see history. But keyboard is faster.
-- **Escape has no delay** — `escape-time 0` in tmux means nvim mode switches are instant.
-- **Windows start at 1** — both tmux windows and panes are 1-indexed (not 0).
+- **Clipboard** — nvim uses `unnamedplus`; drag terminal text in Corgi to copy it. Hold Shift over mouse-aware applications.
+- **Mouse navigation** — click tabs, panes or sidebar agents to focus them; drag split dividers to resize.
+- **Tab shortcuts start at 1** with the Corgi preset.
 - **Inline git blame** is always on via gitsigns — see who wrote each line without leaving nvim.
 - **`:Lazy`** opens the plugin manager UI — update plugins with `U`, check status, sync lockfile.
 - **`:Mason`** manages LSP servers — currently auto-installs `gopls`. Add more in `init.lua`.
 - **Relative line numbers** make `5j` / `12k` jumps easy — just read the number next to the target line.
-- **`Ctrl-a z`** zooms a tmux pane to fullscreen and back — great for temporarily focusing on one pane.
-- **Splits open in the current directory** — `Ctrl-a |` and `Ctrl-a -` inherit the working directory of the current pane.
+- **`Ctrl-a z`** zooms a Corgi pane and back — great for temporarily focusing on one pane.
+- **Agent integration** — run your agent in a Corgi pane; Corgi detects it and handles its integration. `corgi integration status` reports hook status.
+- **Remote sessions** — `ssh -t host corgi` reconnects to the runtime on that host.
 
 ---
 
