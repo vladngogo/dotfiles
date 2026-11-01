@@ -52,6 +52,10 @@ jobs:
             echo "PROMPT_EOF"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Note start time
+        id: start
+        run: echo "since=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
       - uses: anthropics/claude-code-action@v1
         env:
           ANTHROPIC_BASE_URL: https://api.deepseek.com/anthropic
@@ -65,3 +69,13 @@ jobs:
           claude_args: |
             --model deepseek-v4-pro
             --allowedTools "Read,Grep,Glob,mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+
+      # Fail the job unless this run's verdict is "looks good", so branch
+      # protection can require it. After declining a finding without a push,
+      # re-run this job to get a fresh verdict.
+      - name: Check verdict
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          .github/scripts/review-verdict.sh "${{ github.repository }}" \
+            "${{ github.event.pull_request.number }}" "${{ steps.start.outputs.since }}"

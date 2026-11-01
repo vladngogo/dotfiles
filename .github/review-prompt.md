@@ -23,5 +23,9 @@ Rules:
 - Only report issues you can point to in the diff and would defend. No style
   nits, no praise, no restating what the PR does.
 - Put each specific issue on its line as an inline comment.
-- Finish with one top-level comment via `gh pr comment`: a verdict (looks good /
-  needs changes) and the issues ranked. If you found nothing, say so in one line.
+- Finish with one top-level comment via `gh pr comment`. Its first line must be
+  exactly `Verdict: looks good` or `Verdict: needs changes` (CI parses it and
+  blocks the merge on anything else), followed by the issues ranked. If you
+  found nothing, say so in one line.
+- "Looks good" means no finding you would block the merge on, including OPEN
+  findings from earlier rounds that are still present.
