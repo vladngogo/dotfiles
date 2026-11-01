@@ -8,6 +8,38 @@
       "Read(~/.config/gh/**)",
       "Read(**/.env)",
       "Read(**/.env.*)"
+    ],
+    "allow": [
+      "Bash(journalctl *)",
+      "Bash(lsblk *)",
+      "Bash(shellcheck *)",
+      "Bash(pactl list *)",
+      "Bash(pactl get-default-sink)",
+      "Bash(systemctl is-enabled *)",
+      "Bash(systemctl --user is-enabled *)",
+      "Bash(systemctl is-active *)",
+      "Bash(systemctl --user is-active *)",
+      "Bash(systemctl status *)",
+      "Bash(systemctl --user status *)",
+      "Bash(sensors *)",
+      "Bash(dpkg -l *)",
+      "Bash(apt-cache policy *)",
+      "Bash(apt list *)",
+      "Bash(lspci *)",
+      "Bash(lsmod)",
+      "Bash(swapon --show *)",
+      "Bash(findmnt *)",
+      "Bash(lsusb *)"
+    ],
+    "ask": [
+      "Bash(journalctl *--va*)",
+      "Bash(journalctl *--rot*)",
+      "Bash(journalctl *--fl*)",
+      "Bash(journalctl *--sync*)",
+      "Bash(journalctl *--rel*)",
+      "Bash(journalctl *--sm*)",
+      "Bash(journalctl *--se*)",
+      "Bash(journalctl *--up*)"
     ]
   },
   "hooks": {

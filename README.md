@@ -137,7 +137,7 @@ agents/             — tool-agnostic agent config (the source of truth)
   tests/            — `python3 -m unittest discover -s agents/tests`
 claude/             — thin Claude Code adapter
   CLAUDE.md         — imports `~/.claude/AGENTS.md` and, if present, `~/.claude/local.md`
-  settings.json     — deny reads of secrets, wires the guard and lint hooks
+  settings.json     — deny reads of secrets, allow read-only system queries, wires the guard and lint hooks
   merge-settings    — merge settings.json into ~/.claude/settings.json (install.sh)
 opencode/           — thin OpenCode V2 adapter
   install           — link shared instructions/skills and archive stale integrations
@@ -170,7 +170,7 @@ hides the link with `.git/info/exclude`, so the team's `.gitignore` is untouched
 `${XDG_CONFIG_HOME:-~/.config}/opencode/`, never
 the whole directory, because those also hold credentials and session history.
 `settings.json` is the exception: Claude Code (`/config`) and Corgi rewrite it,
-so `claude/merge-settings` adds the repo's deny rules and hooks to the local
+so `claude/merge-settings` adds the repo's permission rules and hooks to the local
 file instead, keeping everything already there. To share a new setting, add it
 to `claude/settings.json` and re-run `install.sh`; removing one from the repo
 does not remove it locally, and a repo hook deleted locally comes back on the
