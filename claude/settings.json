@@ -32,14 +32,14 @@
       "Bash(lsusb *)"
     ],
     "ask": [
-      "Bash(journalctl *--vacuum*)",
-      "Bash(journalctl *--rotate*)",
-      "Bash(journalctl *--flush*)",
+      "Bash(journalctl *--va*)",
+      "Bash(journalctl *--rot*)",
+      "Bash(journalctl *--fl*)",
       "Bash(journalctl *--sync*)",
-      "Bash(journalctl *--relinquish-var*)",
-      "Bash(journalctl *--smart-relinquish-var*)",
-      "Bash(journalctl *--setup-keys*)",
-      "Bash(journalctl *--update-catalog*)"
+      "Bash(journalctl *--rel*)",
+      "Bash(journalctl *--sm*)",
+      "Bash(journalctl *--se*)",
+      "Bash(journalctl *--up*)"
     ]
   },
   "hooks": {
