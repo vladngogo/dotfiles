@@ -1,6 +1,8 @@
-Review this pull request. Read AGENTS.md (and any AGENTS.md in touched
-directories) first: its rules are the project's standards, and breaking one is
-a finding.
+Review this pull request. The repo's AGENTS.md files, the diff and earlier
+review threads are included below, so don't fetch them again; read other files
+only when you need context the diff lacks. AGENTS.md rules are the project's
+standards, and breaking one is a finding. You have a limited number of turns:
+post all inline comments together, then the summary comment, then the verdict.
 
 Earlier review threads on this PR are listed at the end, with any replies.
 Before reporting anything, check them:

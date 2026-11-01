@@ -30,26 +30,20 @@ jobs:
         with:
           fetch-depth: 1
 
-      # Earlier threads are loaded here, not via a reviewer tool, so the
-      # reviewer needs no API access beyond posting comments.
+      # The diff, AGENTS.md files and earlier threads go into the prompt, so
+      # the reviewer doesn't spend slow turns fetching them.
       - name: Build prompt
         id: prompt
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          threads="$(.github/scripts/review-threads.sh "${{ github.repository_owner }}" \
-            "${{ github.event.repository.name }}" "${{ github.event.pull_request.number }}")"
+          # A random delimiter, so no line in the diff can end the output early.
+          eof="PROMPT_EOF_$(openssl rand -hex 16)"
           {
-            echo "text<<PROMPT_EOF"
-            echo "REPO: ${{ github.repository }}"
-            echo "PR NUMBER: ${{ github.event.pull_request.number }}"
-            echo
-            cat .github/review-prompt.md
-            echo
-            echo "## Earlier review threads on this PR"
-            echo
-            echo "$threads"
-            echo "PROMPT_EOF"
+            echo "text<<$eof"
+            .github/scripts/review-prompt.sh "${{ github.repository_owner }}" \
+              "${{ github.event.repository.name }}" "${{ github.event.pull_request.number }}"
+            echo "$eof"
           } >> "$GITHUB_OUTPUT"
 
       - uses: anthropics/claude-code-action@v1
@@ -67,6 +61,7 @@ jobs:
           prompt: ${{ steps.prompt.outputs.text }}
           claude_args: |
             --model deepseek-v4-pro
+            --max-turns 15
             --allowedTools "Read,Grep,Glob,mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
             --json-schema '{"type":"object","properties":{"verdict":{"type":"string","enum":["looks good","needs changes"]}},"required":["verdict"]}'
 
