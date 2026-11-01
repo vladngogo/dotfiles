@@ -23,9 +23,10 @@ Rules:
 - Only report issues you can point to in the diff and would defend. No style
   nits, no praise, no restating what the PR does.
 - Put each specific issue on its line as an inline comment.
-- Finish with one top-level comment via `gh pr comment`. Its first line must be
-  exactly `Verdict: looks good` or `Verdict: needs changes` (CI parses it and
-  blocks the merge on anything else), followed by the issues ranked. If you
-  found nothing, say so in one line.
+- Post one top-level comment via `gh pr comment`: first line
+  `Verdict: looks good` or `Verdict: needs changes`, then the issues ranked.
+  If you found nothing, say so in one line.
+- Then return the same verdict as your structured output. CI reads only that
+  to decide whether the PR can merge; the comment is for people.
 - "Looks good" means no finding you would block the merge on, including OPEN
   findings from earlier rounds that are still present.
