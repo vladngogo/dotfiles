@@ -45,3 +45,22 @@ Applies in every repo. A repo's own `AGENTS.md` overrides anything here.
   resolve.
 - Never resolve a thread you didn't address. One reply per thread; no
   "thanks" or restating the comment.
+
+## Pull requests
+
+Opening a PR means seeing it through to merge, without waiting to be asked:
+
+- Work in a worktree on its own branch, never in a checkout another session
+  may be using.
+- After pushing, watch the PR: wait for checks (`gh pr checks <n> --watch`)
+  and for the review of the current head commit.
+- Handle each review as above, push, and wait for the re-review. If you only
+  replied (declined a finding, no push), re-run the review job instead
+  (`gh run rerun <run-id>`).
+- Turn on auto-merge (`gh pr merge <n> --auto --merge --delete-branch`).
+  Branch protection merges only when the checks and the review job pass, and
+  the review job fails unless the verdict is "looks good". Never bypass it with
+  `--admin`.
+- Stop and ask instead of merging when a fix would change scope or a decision
+  I made, the reviewer and you still disagree after replying, or a third
+  round of review still finds new issues.
