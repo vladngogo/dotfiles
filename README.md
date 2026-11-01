@@ -91,9 +91,33 @@ Use `c` to comment, Enter to save, and `E` to send feedback. In Neovim, visual-m
 [annotation guide](corgi/ANNOTATE.md) for capture management, targeting, SSH,
 clipboard support, and migration details.
 
+### Secrets and keys
+
+`keystash` stores API keys and other secrets in `~/.secrets` (override with
+`KEYSTASH_DIR`). The secret is read from stdin with echo off, so it never shows
+on screen, in shell history, or in `ps`. The directory is 700, files are 600 from
+the moment they are created, and existing names are never overwritten without `--force`.
+
+```bash
+keystash save openai                   # paste (multi-line is fine), then Ctrl-D
+wl-paste -n | keystash save openai     # or pipe it from the clipboard
+export OPENAI_API_KEY="$(cat "$(keystash path openai)")"
+keystash rsa deploy                    # 4096-bit RSA pair; prompts for a passphrase
+ssh -i "$(keystash path deploy)" host
+keystash list                          # names only, never contents
+```
+
+`keystash rsa` uses `ssh-keygen` (`--bits N` for a larger key, minimum 3072). For new SSH keys
+where RSA isn't required, `ssh-keygen -t ed25519` is smaller and faster.
+Input is stored byte for byte, so pressing Enter before Ctrl-D adds a trailing newline.
+`settings.json` and `guard-bash` guard against agents accidentally reading the default
+`~/.secrets` path; like the other credential rules, they don't cover a custom
+`KEYSTASH_DIR` or a path hidden behind `$(keystash path …)`.
+
 ## Structure
 
 ```
+bin/keystash        — save secrets and generate RSA keys privately (→ ~/.local/bin)
 nvim/
   init.lua          — single-file nvim config (lazy.nvim, telescope, gitsigns, lsp, etc.)
   lazy-lock.json    — plugin lockfile

@@ -56,6 +56,8 @@ CASES = [
     # credential paths
     ("cat ~/.ssh/id_ed25519", True, True),
     ("ls $HOME/.aws/", True, True),
+    ("cat ~/.secrets/openai", True, True),
+    ("keystash save openai", False, False),
     ("cat ~/.config/gh/hosts.yml", True, True),
     ("cat .env", True, True),
     ("source app/.env.local", True, True),

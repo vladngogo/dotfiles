@@ -1,0 +1,165 @@
+#!/usr/bin/env bash
+# keystash — save secrets and generate RSA keys without exposing them.
+#
+# Secrets never pass through argv (visible in ps and shell history) or the
+# screen: they are read from stdin with echo off and written straight to disk.
+set -euo pipefail
+
+# Everything created from here on is private from the first byte, so there is
+# no window between creating a file and chmod-ing it.
+umask 077
+
+STORE="${KEYSTASH_DIR:-$HOME/.secrets}"
+MIN_RSA_BITS=3072
+
+usage() {
+    cat <<EOF
+Usage: keystash <command> [args]
+
+  save <name> [--force]                   read a secret from stdin, store it (600)
+  rsa  <name> [--bits N] [--no-passphrase] generate an RSA key pair (default 4096)
+  list                                    list stored names, never contents
+  path <name>                             print a stored file's path
+
+Store: ${STORE} (override with KEYSTASH_DIR)
+
+Examples:
+  keystash save openai                    # paste, then Ctrl-D; nothing echoes
+  wl-paste -n | keystash save openai      # or pipe it in
+  export OPENAI_API_KEY="\$(cat "\$(keystash path openai)")"
+  keystash rsa deploy                     # prompts for a passphrase
+  ssh -i "\$(keystash path deploy)" host
+EOF
+}
+
+die() { echo "keystash: $*" >&2; exit 1; }
+
+# Remove a half-written temp file and restore terminal echo on any exit,
+# including Ctrl-C mid-paste.
+tmp=""
+stty_saved=""
+cleanup() {
+    [ -z "$tmp" ] || rm -f "$tmp"
+    [ -z "$stty_saved" ] || stty "$stty_saved" 2>/dev/null || true
+}
+
+check_name() {
+    [[ "$1" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]*$ ]] && [[ "$1" != *..* ]] ||
+        die "invalid name '$1': use letters, digits, '.', '_' and '-'"
+}
+
+ensure_store() {
+    [ -L "$STORE" ] && die "$STORE is a symlink; refusing to use it"
+    mkdir -p "$STORE"
+    [ -O "$STORE" ] || die "$STORE is not owned by you"
+    chmod 700 "$STORE"
+}
+
+cmd_save() {
+    local name="" force=0
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -f|--force) force=1 ;;
+            -*) die "unknown option $1" ;;
+            *) [ -z "$name" ] || die "save takes one name"; name="$1" ;;
+        esac
+        shift
+    done
+    [ -n "$name" ] || die "usage: keystash save <name> [--force]"
+    check_name "$name"
+    ensure_store
+    local dest="$STORE/$name"
+    if [ -e "$dest" ] && [ "$force" = 0 ]; then
+        die "$dest exists; pass --force to replace it"
+    fi
+
+    tmp="$(mktemp "$STORE/.$name.XXXXXX")"
+    trap cleanup EXIT
+    trap 'exit 130' INT TERM
+
+    if [ -t 0 ]; then
+        stty_saved="$(stty -g)"
+        # Turn echo off before prompting, so nothing typed after the prompt shows.
+        # -icanon lifts the terminal's ~4 KB line limit, which would otherwise
+        # silently truncate long single-line pastes; Ctrl-D is then a plain byte.
+        stty -echo -icanon min 1 time 0
+        echo "Paste the secret, then press Ctrl-D (input is hidden):" >&2
+        local secret=""
+        IFS= read -r -d $'\004' secret || true
+        # printf is a builtin, so the secret never appears in another process's argv.
+        printf '%s' "$secret" > "$tmp"
+        unset secret
+        stty "$stty_saved"
+        stty_saved=""
+        echo >&2
+    else
+        cat > "$tmp"
+    fi
+
+    [ -s "$tmp" ] || die "no input received; nothing saved"
+    mv -f "$tmp" "$dest"
+    tmp=""
+    echo "Saved $dest (mode 600, $(wc -c < "$dest" | tr -d ' ') bytes)" >&2
+}
+
+cmd_rsa() {
+    local name="" bits=4096 passphrase=1
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --bits) [ $# -ge 2 ] || die "--bits needs a value"; bits="$2"; shift ;;
+            --no-passphrase) passphrase=0 ;;
+            -*) die "unknown option $1" ;;
+            *) [ -z "$name" ] || die "rsa takes one name"; name="$1" ;;
+        esac
+        shift
+    done
+    [ -n "$name" ] || die "usage: keystash rsa <name> [--bits N] [--no-passphrase]"
+    check_name "$name"
+    [[ "$bits" =~ ^[0-9]+$ ]] && [ "$bits" -ge "$MIN_RSA_BITS" ] ||
+        die "--bits must be at least $MIN_RSA_BITS"
+    command -v ssh-keygen >/dev/null 2>&1 || die "ssh-keygen not found (install openssh-client)"
+    ensure_store
+    local dest="$STORE/$name"
+    if [ -e "$dest" ] || [ -e "$dest.pub" ]; then
+        die "$dest already exists; remove it first"
+    fi
+
+    # ssh-keygen prompts for the passphrase itself with echo off; a passphrase
+    # is never passed with -N, which would put it in argv.
+    local args=(-q -t rsa -b "$bits" -f "$dest" -C "$name@$(hostname 2>/dev/null || echo host)")
+    [ "$passphrase" = 1 ] || args+=(-N "")
+    ssh-keygen "${args[@]}"
+    chmod 600 "$dest"
+    chmod 644 "$dest.pub"
+    echo "Private key: $dest (mode 600)" >&2
+    echo "Public key:  $dest.pub" >&2
+    ssh-keygen -l -f "$dest.pub" >&2
+}
+
+cmd_list() {
+    [ -d "$STORE" ] || return 0
+    local f
+    for f in "$STORE"/*; do
+        [ -f "$f" ] && basename "$f"
+    done
+    return 0
+}
+
+cmd_path() {
+    [ $# -eq 1 ] || die "usage: keystash path <name>"
+    check_name "$1"
+    [ -e "$STORE/$1" ] || die "no secret named '$1'"
+    echo "$STORE/$1"
+}
+
+[ $# -gt 0 ] || { usage >&2; exit 1; }
+command="$1"
+shift
+case "$command" in
+    save) cmd_save "$@" ;;
+    rsa) cmd_rsa "$@" ;;
+    list|ls) cmd_list ;;
+    path) cmd_path "$@" ;;
+    -h|--help|help) usage ;;
+    *) usage >&2; exit 1 ;;
+esac

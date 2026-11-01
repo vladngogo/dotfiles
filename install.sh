@@ -93,6 +93,7 @@ link() {
 AGENTS_SRC="$DOTFILES/agents"
 
 link "$DOTFILES/corgi/bin/corgi-annotate" "$HOME/.local/bin/corgi-annotate"
+link "$DOTFILES/bin/keystash" "$HOME/.local/bin/keystash"
 
 # Claude Code: CLAUDE.md just imports AGENTS.md so the content stays generic.
 CLAUDE_DIR="$HOME/.claude"
