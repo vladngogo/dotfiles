@@ -130,7 +130,8 @@ def parse_cost(stdout: str) -> float | None:
             data = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if isinstance(data, dict) and "total_cost_usd" in data:
+        # A crashed agent may report null; that's no cost, not a batch failure.
+        if isinstance(data, dict) and isinstance(data.get("total_cost_usd"), (int, float)):
             return float(data["total_cost_usd"])
     return None
 

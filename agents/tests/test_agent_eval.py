@@ -96,6 +96,16 @@ class AgentEvalTest(unittest.TestCase):
         self.assertEqual(cmp.returncode, 0, cmp.stdout)
         self.assertIn("new (no baseline)", cmp.stdout)
 
+    def test_failed_agent_with_null_cost_is_recorded(self):
+        # An agent that died before reporting a cost must fail its run, not
+        # abort the whole batch.
+        self.config("echo '{\"total_cost_usd\": null}'; exit 1")
+        r = self.run_eval("run", "--label", "crash", "-k", "greet", "--runs", "1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        s = self.summary("crash")
+        self.assertEqual(s["greet"]["passed"], 0)
+        self.assertIsNone(s["greet"]["mean_cost_usd"])
+
     def test_filter_and_label_reuse(self):
         self.config("true")
         self.assertEqual(self.run_eval("run", "--label", "a", "-k", "greet").returncode, 0)
