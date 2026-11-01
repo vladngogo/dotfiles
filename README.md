@@ -135,7 +135,7 @@ agents/             — tool-agnostic agent config (the source of truth)
   repos/<repo>.md   — personal notes for one repo
   tests/            — `python3 -m unittest discover -s agents/tests`
 claude/             — thin Claude Code adapter
-  CLAUDE.md         — only `@~/.claude/AGENTS.md`
+  CLAUDE.md         — imports `~/.claude/AGENTS.md` and, if present, `~/.claude/local.md`
   settings.json     — deny reads of secrets, wires the git guard hook
   merge-settings    — merge settings.json into ~/.claude/settings.json (install.sh)
 opencode/           — thin OpenCode V2 adapter
@@ -152,11 +152,15 @@ Instructions come in three layers:
 | Personal, every repo | `agents/AGENTS.md` → `~/.claude/CLAUDE.md` | no |
 | Team, one repo | that repo's `AGENTS.md` (+ `CLAUDE.md` containing `@AGENTS.md`) | yes |
 | Personal, one repo | `agents/repos/<repo>.md` → `CLAUDE.local.md` via `agent-link` | no |
+| Personal, one machine | `~/.claude/local.md`, outside this repo (Claude Code only) | no |
 
 Test for where a line goes: would a teammate on a different OS, who's never
 seen your setup, get worse results without it? Then it's the repo's. If it
 would be wrong or irrelevant for them, it's personal. Rules that must never
 break go in CODEOWNERS, branch protection, hooks or CI, not only in prose.
+
+Machine facts (hostnames, hardware, local doc paths) go in `~/.claude/local.md`,
+which never enters the repo. Claude Code skips the import when the file is missing.
 
 Run `agent-link --init` in a fresh clone to attach (or create) your notes. It
 hides the link with `.git/info/exclude`, so the team's `.gitignore` is untouched.
