@@ -1,12 +1,14 @@
 # Evals for the PR reviewer (.github/review-prompt.md + model). Run from the
-# repo root with REVIEW_EVAL_ROOT set to it. The defaults (deepseek-flash, 30
-# turns) match CI; override REVIEW_MODEL / REVIEW_MAX_TURNS to compare:
+# repo root with REVIEW_EVAL_ROOT set to it. The defaults (deepseek-flash, no
+# turn cap) match CI; override REVIEW_MODEL / REVIEW_MAX_TURNS to compare:
 #
 #   REVIEW_EVAL_ROOT=$PWD agent-eval run --label "flash-$(date +%F)"
 #   REVIEW_EVAL_ROOT=$PWD REVIEW_MODEL=deepseek-v4-pro agent-eval run --label "pro-$(date +%F)"
 #
-# Labels must be new; results/pro and results/flash hold the committed
-# baseline for this model switch.
+# Labels must be new. results/pro and results/flash are the model-switch
+# baseline; results/flash-nocap re-ran Flash after the turn cap and the
+# prompt's turn-limit line were dropped. (The local CLI never enforced
+# --max-turns, so all three ran uncapped in practice.)
 #
 # The model and cap each run used are on the last line of its agent.out.
 #
@@ -15,4 +17,4 @@
 agent = '"$REVIEW_EVAL_ROOT/evals/review-agent.sh"'
 runs = 3
 jobs = 15
-timeout_s = 900
+timeout_s = 1200   # the CI review job's timeout-minutes
