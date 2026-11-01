@@ -92,6 +92,8 @@ link() {
 
 AGENTS_SRC="$DOTFILES/agents"
 
+link "$DOTFILES/corgi/bin/corgi-annotate" "$HOME/.local/bin/corgi-annotate"
+
 # Claude Code: CLAUDE.md just imports AGENTS.md so the content stays generic.
 CLAUDE_DIR="$HOME/.claude"
 link "$AGENTS_SRC/AGENTS.md" "$CLAUDE_DIR/AGENTS.md"

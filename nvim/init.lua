@@ -285,3 +285,22 @@ map("n", "<Esc>", "<cmd>nohlsearch<CR>", "Clear highlight")
 -- Insert mode escape
 map("i", "jk", "<Esc>", "Exit insert mode")
 
+-- Pass the selection directly so annotations also work over headless SSH.
+vim.keymap.set("x", "<leader>a", function()
+  if not vim.env.CORGI_PANE or vim.fn.executable("corgi-annotate") == 0 then
+    vim.notify("Run Neovim inside Corgi and install corgi-annotate first", vim.log.levels.ERROR)
+    return
+  end
+  local previous = vim.fn.getreginfo("z")
+  vim.cmd('normal! "zy')
+  local text = vim.fn.getreg("z")
+  vim.fn.setreg("z", previous)
+  vim.fn.jobstart({ "corgi-annotate", "capture", "--pane", "current", "--text=" .. text }, {
+    on_stderr = function(_, lines)
+      local message = table.concat(lines, "\n"):gsub("%s+$", "")
+      if message ~= "" then
+        vim.schedule(function() vim.notify(message, vim.log.levels.ERROR) end)
+      end
+    end,
+  })
+end, { desc = "Annotate selection in Corgi", silent = true })
