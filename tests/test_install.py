@@ -54,7 +54,7 @@ chmod 755 "$HOME/.local/bin/corgi"
         # exercise real hashing of the fixture rather than mocking verification.
         self.dotfiles = self.base / "dotfiles"
         self.dotfiles.mkdir()
-        for directory in ("corgi", "nvim", "agents", "claude"):
+        for directory in ("bin", "corgi", "nvim", "agents", "claude"):
             (self.dotfiles / directory).symlink_to(ROOT / directory)
         digest = hashlib.sha256(self.installer.read_bytes()).hexdigest()
         script, replacements = re.subn(r'expected="[0-9a-f]{64}"',
@@ -105,6 +105,7 @@ exit "${FAKE_CURL_FAIL:-0}"
         self.assertEqual(self.viewer.stat().st_mode & 0o777, 0o600)
         for target, source in ((".config/nvim/init.lua", "nvim/init.lua"),
                                (".local/bin/corgi-annotate", "corgi/bin/corgi-annotate"),
+                               (".local/bin/keystash", "bin/keystash"),
                                (".codex/AGENTS.md", "agents/AGENTS.md")):
             self.assertEqual((self.home / target).resolve(), ROOT / source)
         settings = self.home / ".claude/settings.json"

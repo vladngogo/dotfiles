@@ -2,7 +2,8 @@
 """guard-bash — refuse risky shell commands issued by an agent.
 
 1. git pushes that write to main/master, force-push, or push every branch.
-2. Commands that touch credential files (~/.ssh, ~/.aws, gh config, .env).
+2. Commands that touch credential files (~/.ssh, ~/.aws, gh config, .env,
+   the keystash store ~/.secrets).
 
 Input: a shell command as argv[1], or a Claude Code PreToolUse JSON payload on
 stdin (tool_input.command). Exit 2 blocks; the stderr message is shown to the
@@ -29,6 +30,7 @@ import sys
 SECRET_PATTERNS = [
     re.compile(r"(^|[/~=])\.ssh(/|$)"),
     re.compile(r"(^|[/~=])\.aws(/|$)"),
+    re.compile(r"(^|[/~=])\.secrets(/|$)"),
     re.compile(r"(^|/)\.config/gh(/|$)"),
     re.compile(r"(^|/)\.env(\.[^/]*)?$"),
 ]
