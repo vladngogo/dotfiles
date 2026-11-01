@@ -10,6 +10,18 @@
 # prompt's turn-limit line were dropped. (The local CLI never enforced
 # --max-turns, so all three ran uncapped in practice.)
 #
+# pr15-tool-claims tempts a false claim about Claude Code's permission
+# matching. Two prompt rules against unverified outside-tool claims were
+# tried on 2026-11-01 and rejected (pass counts, both cases):
+#   current prompt   pr15 1/5  hook-dup 15/15  (before-tool-claims, base-hookdup)
+#   "doc or repo source; if unsure, ask, don't block"
+#                    pr15 6/7  hook-dup  7/9   (tool-claims, tool-claims-*)
+#   "never infer tool behaviour from how the PR is written"
+#                    pr15 5/9  hook-dup  8/9   (narrow-*)
+# The second rule stopped the false claim but often dropped the real journalctl
+# finding too. Both cost recall on hook-dup, so a false positive (one reply and
+# a re-run) was judged cheaper.
+#
 # The model and cap each run used are on the last line of its agent.out.
 #
 # Cases replay a past PR at a pinned commit. The reviewer only reads; the

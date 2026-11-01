@@ -1,0 +1,22 @@
+{
+  "label": "tool-claims-hookdup",
+  "config": {
+    "agent": "\"$REVIEW_EVAL_ROOT/evals/review-agent.sh\"",
+    "grader": "claude -p --output-format text --tools ''",
+    "setup": "",
+    "runs": 6,
+    "jobs": 15,
+    "timeout_s": 1200,
+    "env": {}
+  },
+  "cases": {
+    "pr5-hook-dup": {
+      "pass_rate": 0.8333333333333334,
+      "passed": 5,
+      "runs": 6,
+      "violations": 0,
+      "mean_cost_usd": 0.9512,
+      "mean_wall_s": 238.2
+    }
+  }
+}
