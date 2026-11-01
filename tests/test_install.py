@@ -160,6 +160,58 @@ exit "${FAKE_CURL_FAIL:-0}"
         self.assertEqual(plugin.read_text(), "// personal plugin\n")
         self.assertEqual(cli.read_text(), '{"plugins": ["./herdr-opencode"]}\n')
 
+    def test_opencode_unmanaged_skills_link_fails_before_changes(self):
+        config = self.home / ".config/opencode"
+        config.mkdir(parents=True)
+        personal = self.home / "personal-skills"
+        personal.mkdir()
+        (config / "skills").symlink_to(personal)
+        instructions = config / "AGENTS.md"
+        instructions.write_text("personal instructions\n")
+        stale = config / "architect-handoff"
+        stale.symlink_to(self.dotfiles / "opencode/architect-handoff")
+        cli = config / "cli.json"
+        original = '{"plugins": ["./architect-handoff"]}\n'
+        cli.write_text(original)
+        result = self.run_install(success=False)
+        self.assertIn("unmanaged symlink", result.stderr)
+        self.assertEqual(instructions.read_text(), "personal instructions\n")
+        self.assertFalse(instructions.is_symlink())
+        self.assertEqual(cli.read_text(), original)
+        self.assertTrue(stale.is_symlink())
+        self.assertEqual((config / "skills").resolve(), personal)
+        self.assertFalse((config / "retired").exists())
+
+    def test_opencode_herdr_cleanup_preserves_custom_legacy_settings(self):
+        for extra_settings in (False, True):
+            with self.subTest(extra_settings=extra_settings):
+                config = self.home / f"config-{extra_settings}/opencode"
+                (config / "plugins").mkdir(parents=True)
+                self.env["XDG_CONFIG_HOME"] = str(config.parent)
+                for name, marker in (
+                    ("plugins/herdr-agent-state.js", "opencode"),
+                    ("herdr-tui-session.js", "opencode-tui"),
+                ):
+                    (config / name).write_text(
+                        f"// installed by herdr\n// HERDR_INTEGRATION_ID={marker}\n")
+                legacy = config / "tui.jsonc"
+                settings = {"plugin": ["./herdr-tui-session.js"]}
+                if extra_settings:
+                    settings["theme"] = "personal-theme"
+                original = json.dumps(settings) + "\n"
+                legacy.write_text(original)
+                self.run_install()
+                archives = list((config / "retired").iterdir())
+                self.assertEqual(len(archives), 1)
+                for name in ("plugins/herdr-agent-state.js", "herdr-tui-session.js"):
+                    self.assertFalse((config / name).exists())
+                    self.assertTrue((archives[0] / name).is_file())
+                if extra_settings:
+                    self.assertEqual(legacy.read_text(), original)
+                else:
+                    self.assertFalse(legacy.exists())
+                    self.assertEqual((archives[0] / "tui.jsonc").read_text(), original)
+
     def test_settings_merge_keeps_local_entries_and_is_idempotent(self):
         self.executable(self.launcher)
         settings = self.home / ".claude/settings.json"

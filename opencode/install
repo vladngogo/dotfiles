@@ -29,6 +29,9 @@ def install(root, config):
     settings = json.loads(cli.read_text()) if cli.exists() else None
     if settings is not None and not isinstance(settings, dict):
         raise ValueError(f"{cli} must contain a JSON object")
+    skills = config / "skills"
+    if skills.is_symlink() and not old_link(skills, root / "opencode/skills"):
+        raise ValueError(f"{skills} is an unmanaged symlink; use a directory for per-skill links")
 
     retired_plugins = set()
     for name in ("opencode.jsonc", "skills", "agents/architect.md",
@@ -86,10 +89,6 @@ def install(root, config):
         print(f"Linked {target} → {source}")
 
     link(root / "agents/AGENTS.md", config / "AGENTS.md")
-    # Do not write through a user-managed directory symlink.
-    skills = config / "skills"
-    if skills.is_symlink():
-        raise ValueError(f"{skills} is an unmanaged symlink; use a directory for per-skill links")
     for source in sorted((root / "agents/skills").iterdir()):
         if (source / "SKILL.md").is_file():
             link(source, skills / source.name)
