@@ -2,10 +2,10 @@
 # AGENTS.md was prose only, against AGENTS.md's own "hard rules belong in
 # tools, hooks, or CI" rule.
 id = "pr6-prose-gate"
-base = "911b7d6"
+base = "5dd6af6"   # the PR's base; the reviewer checks out PR_HEAD
 
 prompt = """
-PR_BASE=5dd6af6
+PR_HEAD=911b7d6
 PR #6: Add a PR policy: watch, answer review, merge when it passes.
 Adds a "Pull requests" section to agents/AGENTS.md.
 """

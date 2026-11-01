@@ -1,10 +1,10 @@
 # PR #5, first round. The reviewer caught that merging hooks by deep equality
 # re-adds the repo's guard hook when the local file groups it differently.
 id = "pr5-hook-dup"
-base = "8a029ec"
+base = "205fed3"   # the PR's base; the reviewer checks out PR_HEAD
 
 prompt = """
-PR_BASE=205fed3
+PR_HEAD=8a029ec
 PR #5: Merge Claude settings into the local file instead of linking it.
 claude/merge-settings merges claude/settings.json into ~/.claude/settings.json:
 objects merge recursively, lists gain missing items, local values win.

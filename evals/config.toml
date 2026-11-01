@@ -1,7 +1,11 @@
 # Evals for the PR reviewer (.github/review-prompt.md + model). Run from the
-# repo root with REVIEW_EVAL_ROOT set to it; pick the model with REVIEW_MODEL:
+# repo root with REVIEW_EVAL_ROOT set to it. The defaults (deepseek-flash, 30
+# turns) match CI; override REVIEW_MODEL / REVIEW_MAX_TURNS to compare:
 #
-#   REVIEW_EVAL_ROOT=$PWD REVIEW_MODEL=deepseek-flash agent-eval run --label flash
+#   REVIEW_EVAL_ROOT=$PWD agent-eval run --label flash
+#   REVIEW_EVAL_ROOT=$PWD REVIEW_MODEL=deepseek-v4-pro agent-eval run --label pro
+#
+# The model and cap each run used are on the last line of its agent.out.
 #
 # Cases replay a past PR at a pinned commit. The reviewer only reads; the
 # grader is the local Claude Code, independent of the model under test.

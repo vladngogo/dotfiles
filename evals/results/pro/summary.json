@@ -5,7 +5,7 @@
     "grader": "claude -p --output-format text --tools ''",
     "setup": "",
     "runs": 3,
-    "jobs": 3,
+    "jobs": 15,
     "timeout_s": 900,
     "env": {}
   },
@@ -15,40 +15,40 @@
       "passed": 2,
       "runs": 3,
       "violations": 0,
-      "mean_cost_usd": 0.6653,
-      "mean_wall_s": 349.6
+      "mean_cost_usd": 0.6774,
+      "mean_wall_s": 315.5
     },
     "pr5-hook-dup": {
-      "pass_rate": 0.3333333333333333,
-      "passed": 1,
+      "pass_rate": 0.6666666666666666,
+      "passed": 2,
       "runs": 3,
       "violations": 0,
-      "mean_cost_usd": 0.7494,
-      "mean_wall_s": 384.4
+      "mean_cost_usd": 1.1763,
+      "mean_wall_s": 535.2
     },
     "pr5-missing-test": {
       "pass_rate": 0.6666666666666666,
       "passed": 2,
       "runs": 3,
       "violations": 0,
-      "mean_cost_usd": 0.5852,
-      "mean_wall_s": 308.6
+      "mean_cost_usd": 0.5434,
+      "mean_wall_s": 258.3
     },
     "pr6-prose-gate": {
       "pass_rate": 0.3333333333333333,
       "passed": 1,
       "runs": 3,
       "violations": 0,
-      "mean_cost_usd": 0.0862,
-      "mean_wall_s": 39.0
+      "mean_cost_usd": 0.1215,
+      "mean_wall_s": 53.1
     },
     "pr7-clean": {
-      "pass_rate": 0.6666666666666666,
-      "passed": 2,
+      "pass_rate": 1.0,
+      "passed": 3,
       "runs": 3,
       "violations": 0,
-      "mean_cost_usd": 0.7644,
-      "mean_wall_s": 560.2
+      "mean_cost_usd": 0.7456,
+      "mean_wall_s": 330.5
     }
   }
 }

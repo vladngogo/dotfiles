@@ -15,40 +15,40 @@
       "passed": 3,
       "runs": 3,
       "violations": 0,
-      "mean_cost_usd": 0.6792,
-      "mean_wall_s": 175.3
+      "mean_cost_usd": 0.6268,
+      "mean_wall_s": 149.1
     },
     "pr5-hook-dup": {
       "pass_rate": 1.0,
       "passed": 3,
       "runs": 3,
       "violations": 0,
-      "mean_cost_usd": 0.6011,
-      "mean_wall_s": 157.3
+      "mean_cost_usd": 1.0193,
+      "mean_wall_s": 259.3
     },
     "pr5-missing-test": {
       "pass_rate": 1.0,
       "passed": 3,
       "runs": 3,
       "violations": 0,
-      "mean_cost_usd": 0.5354,
-      "mean_wall_s": 137.4
+      "mean_cost_usd": 0.7164,
+      "mean_wall_s": 180.6
     },
     "pr6-prose-gate": {
       "pass_rate": 1.0,
       "passed": 3,
       "runs": 3,
       "violations": 0,
-      "mean_cost_usd": 0.2874,
-      "mean_wall_s": 70.3
+      "mean_cost_usd": 0.2474,
+      "mean_wall_s": 59.8
     },
     "pr7-clean": {
       "pass_rate": 1.0,
       "passed": 3,
       "runs": 3,
       "violations": 0,
-      "mean_cost_usd": 0.6869,
-      "mean_wall_s": 172.5
+      "mean_cost_usd": 1.2498,
+      "mean_wall_s": 299.7
     }
   }
 }

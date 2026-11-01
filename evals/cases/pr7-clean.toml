@@ -1,10 +1,10 @@
 # PR #7, final round: the reviewer approved it with no findings.
 # Catches a model that finds problems in everything.
 id = "pr7-clean"
-base = "a9b38e0"
+base = "d09cbcb"   # the PR's base; the reviewer checks out PR_HEAD
 
 prompt = """
-PR_BASE=d09cbcb
+PR_HEAD=a9b38e0
 PR #7: Speed up PR review: inline the diff and AGENTS.md, cap turns.
 """
 
