@@ -2,8 +2,8 @@
 # repo root with REVIEW_EVAL_ROOT set to it. The defaults (deepseek-flash, 30
 # turns) match CI; override REVIEW_MODEL / REVIEW_MAX_TURNS to compare:
 #
-#   REVIEW_EVAL_ROOT=$PWD agent-eval run --label flash-<date>
-#   REVIEW_EVAL_ROOT=$PWD REVIEW_MODEL=deepseek-v4-pro agent-eval run --label pro-<date>
+#   REVIEW_EVAL_ROOT=$PWD agent-eval run --label "flash-$(date +%F)"
+#   REVIEW_EVAL_ROOT=$PWD REVIEW_MODEL=deepseek-v4-pro agent-eval run --label "pro-$(date +%F)"
 #
 # Labels must be new; results/pro and results/flash hold the committed
 # baseline for this model switch.
