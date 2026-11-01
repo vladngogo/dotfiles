@@ -34,5 +34,6 @@ fi
 
 [ $# -eq 3 ] || { echo "usage: $0 REPO PR SINCE" >&2; exit 64; }
 
-# --slurp joins the pages so tail sees comments in order across all of them.
+# --slurp wraps the pages in one outer array ([[page1...], [page2...]]); add
+# flattens it so tail sees comments in order across all of them.
 gh api --paginate --slurp "repos/$1/issues/$2/comments" | jq 'add // []' | verdict_from "$3"

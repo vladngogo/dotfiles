@@ -64,7 +64,9 @@ jobs:
           # Plain Actions token: no Claude GitHub App or Anthropic token
           # exchange needed. Comments post as github-actions[bot].
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          track_progress: true
+          # No progress comment: the reviewer writes its verdict into it instead
+          # of posting the separate comment "Check verdict" reads.
+          track_progress: false
           prompt: ${{ steps.prompt.outputs.text }}
           claude_args: |
             --model deepseek-v4-pro
