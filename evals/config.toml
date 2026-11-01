@@ -7,5 +7,5 @@
 # grader is the local Claude Code, independent of the model under test.
 agent = '"$REVIEW_EVAL_ROOT/evals/review-agent.sh"'
 runs = 3
-jobs = 3
+jobs = 15
 timeout_s = 900
