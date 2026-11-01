@@ -103,6 +103,7 @@ exit "${FAKE_CURL_FAIL:-0}"
         self.assertFalse(self.viewer.is_symlink())
         self.assertEqual(self.viewer.stat().st_mode & 0o777, 0o600)
         for target, source in ((".config/nvim/init.lua", "nvim/init.lua"),
+                               (".local/bin/corgi-annotate", "corgi/bin/corgi-annotate"),
                                (".claude/settings.json", "claude/settings.json"),
                                (".codex/AGENTS.md", "agents/AGENTS.md")):
             self.assertEqual((self.home / target).resolve(), ROOT / source)

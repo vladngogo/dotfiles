@@ -1,0 +1,527 @@
+#!/usr/bin/env python3
+"""Herdr Annotate workflows on Corgi, using Plannotator TUI's delivery interface."""
+import argparse
+import base64
+import hashlib
+import json
+import os
+from pathlib import Path
+import platform
+import shlex
+import shutil
+import sqlite3
+import subprocess
+import sys
+import tempfile
+import time
+import uuid
+
+VERSION = "0.1.0"
+TUI_VERSION = "v0.9.9"
+TUI_RELEASES = {
+    ("Linux", "x86_64"): ("x86_64-unknown-linux-musl", "0fd2cdb5b5750dc5496bd4ffb6fd250540c0e7f82c5b44d339343a2701615320"),
+    ("Linux", "aarch64"): ("aarch64-unknown-linux-gnu", "56069a79dbf245837b723344784645aa7900bacde5c78ed27dcf6d1160837161"),
+    ("Darwin", "arm64"): ("aarch64-apple-darwin", "7e1df874dd905fb85c82e9db4750d1ab64009d4380173ea67bbcb0e4bc9d525b"),
+    ("Darwin", "x86_64"): ("x86_64-apple-darwin", "68b0f974bf14d211a3e2a8e001ff3cf47dcad3bbb90eed0c9b419473ad4eabaa"),
+}
+SELF = Path(__file__).resolve()
+REVIEW_ENV = ("CORGI_SOCKET", "CORGI_ANNOTATE_CORGI", "CORGI_ANNOTATE_TUI", "XDG_STATE_HOME",
+              "XDG_DATA_HOME", "XDG_CONFIG_HOME", "EDITOR", "VISUAL", "PLANNOTATOR_DATA_DIR",
+              "PLANNOTATOR_TUI_THEME", "CLAUDE_CONFIG_DIR", "CODEX_HOME", "COPILOT_HOME",
+              "FACTORY_CONFIG_DIR", "ANTIGRAVITY_CLI_HOME", "ANTIGRAVITY_APP_DATA_DIR",
+              "PI_CODING_AGENT_SESSION_DIR", "PI_CODING_AGENT_DIR", "HERMES_HOME", "OPENCODE_DB")
+
+
+class Error(Exception):
+    def __init__(self, message, code="annotate_error"):
+        super().__init__(message)
+        self.code = code
+
+
+def run(argv, *, text=None, env=None, cwd=None, timeout=20):
+    try:
+        result = subprocess.run(argv, input=text, text=True, capture_output=True,
+                                env=env, cwd=cwd, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise Error(f"{argv[0]}: {exc}") from exc
+    if result.returncode:
+        raise Error(result.stderr.strip() or result.stdout.strip() or
+                    f"{argv[0]} exited {result.returncode}")
+    return result.stdout
+
+
+def corgi(*args, text=None):
+    raw = run([os.environ.get("CORGI_ANNOTATE_CORGI", "corgi"), *map(str, args), "--json"], text=text)
+    try:
+        reply = json.loads(raw)
+    except ValueError as exc:
+        raise Error("Corgi returned invalid JSON") from exc
+    if reply.get("ok") is not True:
+        raise Error(f"Corgi: {reply.get('err', reply)}")
+    return reply
+
+
+def snapshot():
+    reply = corgi("list")
+    state = reply.get("result", {})
+    if not isinstance(state.get("panes"), list) or not state.get("server_pid"):
+        raise Error("Unsupported Corgi snapshot; expected panes and server_pid")
+    return state, reply.get("viewers", [])
+
+
+def pane_by_id(state, pane_id):
+    for pane in state["panes"]:
+        if str(pane["id"]) == str(pane_id) and not pane.get("exited"):
+            return pane
+    raise Error(f"Pane {pane_id} is no longer running", "pane_not_found")
+
+
+def identity(state, pane):
+    agent = pane.get("agent", {})
+    return {"server_pid": state["server_pid"], "pane": pane["id"],
+            "binding": pane.get("binding"), "pid": pane.get("pid"),
+            "provider": agent.get("provider"), "session": agent.get("session", "")}
+
+
+def pick_agent(candidates, option):
+    """Read the controlling terminal, leaving piped input and stdout untouched."""
+    try:
+        reader = open("/dev/tty", "r")
+        try:
+            writer = open("/dev/tty", "w")
+        except OSError:
+            reader.close()
+            raise
+    except OSError as exc:
+        ids = ", ".join(str(p["id"]) for p in candidates)
+        raise Error(f"Multiple agents in this workspace ({ids}); use {option} ID without an interactive terminal") from exc
+    with reader, writer:
+        print("Choose an agent in this workspace:", file=writer)
+        for index, pane in enumerate(candidates, 1):
+            agent = pane["agent"]
+            name = agent.get("name") or pane.get("title") or agent["provider"]
+            name = "".join(c if c.isprintable() else " " for c in str(name))
+            print(f"  {index}. {name} — {agent['provider']} · {agent.get('state', 'unknown')} · pane {pane['id']}", file=writer)
+        while True:
+            print("Agent number (q to cancel): ", end="", file=writer, flush=True)
+            answer = reader.readline().strip()
+            if not answer or answer.lower() == "q":
+                raise Error("Agent selection cancelled")
+            if answer.isdecimal() and 1 <= int(answer) <= len(candidates):
+                return candidates[int(answer) - 1]
+            print(f"Choose a number from 1 to {len(candidates)}.", file=writer)
+
+
+def workspace_agent(state, source, option):
+    if source.get("agent", {}).get("provider"):
+        return source
+    candidates = [p for p in state["panes"] if p["workspace"] == source["workspace"]
+                  and not p.get("exited") and p.get("agent", {}).get("provider")]
+    if not candidates:
+        return source
+    if len(candidates) == 1:
+        return candidates[0]
+    return pick_agent(candidates, option)
+
+
+def context(args):
+    state, viewers = snapshot()
+    viewer = None
+    if args.viewer is not None:
+        viewer = next((v for v in viewers if v["id"] == args.viewer), None)
+        if viewer is None:
+            raise Error(f"Viewer {args.viewer} is not attached")
+    elif len(viewers) == 1:
+        viewer = viewers[0]
+    selected = args.pane
+    if selected == "current":
+        selected = os.environ.get("CORGI_PANE")
+        if not selected:
+            raise Error("current requires CORGI_PANE; use --pane ID")
+    if not selected:
+        selected = viewer["pane"] if args.viewer is not None else os.environ.get("CORGI_PANE")
+        selected = selected or (viewer["pane"] if viewer else None)
+    if not selected:
+        raise Error("Select a source with --pane ID or --viewer ID (see corgi list)")
+    source = pane_by_id(state, selected)
+    if args.pane is None and args.command in ("last", "last-newest"):
+        source = workspace_agent(state, source, "--pane")
+    target = pane_by_id(state, args.to) if args.to else source
+    if args.to and not target.get("agent", {}).get("provider"):
+        raise Error(f"Pane {args.to} has no detected agent", "agent_not_found")
+    if args.pane is None and not args.to and args.command in (
+            "open", "terminal", "manage", "paste-archive", "send-archive"):
+        target = workspace_agent(state, source, "--to")
+    workspace = next(w for w in state["workspaces"] if w["id"] == source["workspace"])
+    cwd = source.get("cwd") or workspace["cwd"]
+    # Folder + socket scopes survive pane changes while keeping runtimes separate.
+    socket = os.environ.get("CORGI_SOCKET") or f"/tmp/corgi-{os.getuid()}/control.sock"
+    scope = json.dumps([str(Path(socket).resolve()), workspace["cwd"]])
+    return {"source": source, "target": identity(state, target), "cwd": cwd,
+            "workspace": workspace["name"], "scope": scope,
+            "viewer": viewer["id"] if viewer else None}
+
+
+def deliver(target, feedback, *, enter=True):
+    if not feedback.strip():
+        raise Error("No annotations to deliver", "empty_agent_prompt")
+    state, _ = snapshot()
+    pane = pane_by_id(state, target["pane"])
+    if identity(state, pane) != target:
+        raise Error("The target agent/session changed; reopen the review", "agent_not_ready")
+    agent = pane.get("agent", {})
+    if not agent.get("provider"):
+        raise Error("The target is a shell, not a detected agent", "agent_not_found")
+    if (agent.get("state") not in ("idle", "done") or
+            agent.get("attention") == "needs_input" or agent.get("paused") or
+            agent.get("tool_active") or agent.get("compacting") or
+            pane.get("dormant") or pane.get("restoring")):
+        raise Error("Agent is busy, starting, or at a dialog; try when its prompt is ready", "agent_blocked")
+    # Never retry a mutation: a lost response can follow successful input delivery.
+    try:
+        corgi("pane", "send", target["pane"], "--stdin", *(["--enter"] if enter else []), text=feedback)
+    except Error as exc:
+        raise Error(f"Delivery not confirmed; inspect the pane before retrying: {exc}", "delivery_unknown") from exc
+
+
+def state_dir():
+    root = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state") / "corgi-annotate"
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    return root
+
+
+def backend():
+    override = os.environ.get("CORGI_ANNOTATE_TUI")
+    if override:
+        return override
+    data = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local/share")
+    binary = data / "corgi-annotate" / "bin" / f"plannotator-tui-{TUI_VERSION}"
+    if binary.is_file() and os.access(binary, os.X_OK):
+        return str(binary)
+    key = (platform.system(), platform.machine())
+    if key not in TUI_RELEASES:
+        raise Error(f"No bundled Plannotator build for {key}; set CORGI_ANNOTATE_TUI to your binary")
+    target, digest = TUI_RELEASES[key]
+    url = f"https://github.com/plannotator/plannotator-tui/releases/download/{TUI_VERSION}/plannotator-tui-{target}"
+    binary.parent.mkdir(parents=True, exist_ok=True)
+    print(f"Installing Plannotator TUI {TUI_VERSION} ({target})…", file=sys.stderr)
+    with tempfile.TemporaryDirectory(prefix="download-", dir=binary.parent) as tmp:
+        download = Path(tmp) / "plannotator-tui"
+        run(["curl", "--disable", "-fsSL", "--proto", "=https", "--proto-redir", "=https",
+             "--connect-timeout", "10", "--max-time", "180", url, "-o", str(download)], timeout=200)
+        if hashlib.sha256(download.read_bytes()).hexdigest() != digest:
+            raise Error("Plannotator checksum mismatch; download was not installed")
+        download.chmod(0o755)
+        download.replace(binary)
+    return str(binary)
+
+
+def clipboard(text=None):
+    if sys.platform == "darwin":
+        commands = [["pbpaste"]] if text is None else [["pbcopy"]]
+    else:
+        commands = ([["wl-paste", "--no-newline"], ["xclip", "-selection", "clipboard", "-o"],
+                     ["xsel", "--clipboard", "--output"]] if text is None else
+                    [["wl-copy"], ["xclip", "-selection", "clipboard"], ["xsel", "--clipboard", "--input"]])
+    for command in commands:
+        if shutil.which(command[0]):
+            try:
+                return run(command, text=text, timeout=5)
+            except Error:
+                pass
+    if text is not None and sys.stdout.isatty():
+        sys.stdout.write("\033]52;c;" + base64.b64encode(text.encode()).decode() + "\a")
+        sys.stdout.flush()
+        return ""
+    raise Error("Clipboard unavailable; use capture --stdin/--file, or export for plain Markdown")
+
+
+def edit(text, heading):
+    editor = os.environ.get("VISUAL") or os.environ.get("EDITOR") or "vi"
+    with tempfile.TemporaryDirectory(prefix="edit-", dir=state_dir()) as tmp:
+        path = Path(tmp) / "comment.md"
+        heading = " ".join(heading.splitlines())
+        path.write_text(text + "\n\n# " + heading + "\n# Lines starting with # are ignored. Empty cancels.\n")
+        result = subprocess.run([*shlex.split(editor), str(path)])
+        if result.returncode:
+            raise Error(f"Editor exited {result.returncode}; annotation was not changed")
+        return "\n".join(line for line in path.read_text().splitlines() if not line.startswith("#")).strip()
+
+
+class Notes:
+    def __init__(self, scope):
+        self.scope = scope
+        self.db = sqlite3.connect(state_dir() / "annotations.sqlite3", timeout=20)
+        self.db.row_factory = sqlite3.Row
+        self.db.execute("""CREATE TABLE IF NOT EXISTS notes (
+            id INTEGER PRIMARY KEY, scope TEXT NOT NULL, source TEXT NOT NULL,
+            quote TEXT NOT NULL, comment TEXT NOT NULL, archived INTEGER NOT NULL DEFAULT 0,
+            created REAL NOT NULL)""")
+
+    def add(self, source, quote, comment):
+        with self.db:
+            row = self.db.execute("INSERT INTO notes(scope,source,quote,comment,created) VALUES(?,?,?,?,?)",
+                                  (self.scope, source, quote, comment, time.time()))
+        return row.lastrowid
+
+    def rows(self, archived=False):
+        return self.db.execute("SELECT * FROM notes WHERE scope=? AND archived=? ORDER BY id",
+                               (self.scope, int(archived))).fetchall()
+
+    def change(self, note_id, *, comment=None, archived=None):
+        with self.db:
+            field, value = ("comment", comment) if comment is not None else ("archived", int(archived))
+            result = self.db.execute(f"UPDATE notes SET {field}=? WHERE id=? AND scope=?",
+                                     (value, note_id, self.scope))
+            if not result.rowcount:
+                raise Error(f"Annotation {note_id} is not in this workspace")
+
+    def handoff(self, action, target):
+        # Serialize readers that deliver/archive, so two invocations cannot send the same batch.
+        self.db.execute("BEGIN IMMEDIATE")
+        try:
+            rows = self.rows()
+            if not rows:
+                raise Error("No active annotations")
+            text = render(rows)
+            if action.startswith("copy"):
+                clipboard(text)
+            else:
+                deliver(target, text, enter=action.startswith("send"))
+            if action.endswith("archive"):
+                self.db.executemany("UPDATE notes SET archived=1 WHERE id=?", [(r["id"],) for r in rows])
+            self.db.commit()
+        except BaseException:
+            self.db.rollback()
+            raise
+
+
+def render(rows):
+    parts = ["# Terminal annotations"]
+    for number, row in enumerate(rows, 1):
+        quote = "\n".join("> " + line for line in row["quote"].splitlines())
+        parts.append(f"## Annotation {number} — {row['source']}\n\nComment on:\n{quote}\n\n{row['comment']}")
+    return "\n\n".join(parts) + "\n"
+
+
+def manager(ctx):
+    notes = Notes(ctx["scope"])
+    archived = False
+    while True:
+        rows = notes.rows(archived)
+        print("\n" + ("Archived" if archived else "Active") + " terminal annotations")
+        for row in rows:
+            print(f"  {row['id']}: {row['source']} | {row['quote'][:70]!r} → {row['comment'][:70]!r}")
+        command = input("[e ID] edit [a ID] archive [u ID] restore [h] history [y] copy [p] paste [s] send [q] quit: ").strip()
+        try:
+            if command == "q":
+                return
+            if command == "h":
+                archived = not archived
+            elif command in ("y", "p", "s"):
+                notes.handoff({"y": "copy-context", "p": "paste-archive", "s": "send-archive"}[command], ctx["target"])
+            elif command.startswith(("e ", "a ", "u ")):
+                action, note_id = command.split()
+                row = next((r for r in rows if str(r["id"]) == note_id), None)
+                if row is None:
+                    raise Error("Choose a displayed annotation ID")
+                if action == "e":
+                    comment = edit(row["comment"], f"Comment on: {row['quote'][:120]}")
+                    if comment:
+                        notes.change(row["id"], comment=comment)
+                else:
+                    notes.change(row["id"], archived=action == "a")
+        except (Error, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+
+
+def tui_environment(ctx):
+    # Plannotator's existing transport invokes this executable, never Herdr.
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("HERDR_", "PLANNOTATOR_TUI_"))}
+    if "PLANNOTATOR_TUI_THEME" in os.environ:
+        env["PLANNOTATOR_TUI_THEME"] = os.environ["PLANNOTATOR_TUI_THEME"]
+    if ctx["target"]["provider"]:
+        env.update(HERDR_ENV="1", HERDR_BIN_PATH=str(SELF),
+                   PLANNOTATOR_TUI_DELIVER_TO=str(ctx["target"]["pane"]),
+                   PLANNOTATOR_TUI_DELIVER_AGENT=ctx["target"]["provider"],
+                   CORGI_ANNOTATE_TARGET=json.dumps(ctx["target"]))
+    env["PLANNOTATOR_TUI_CWD"] = ctx["cwd"]
+    return env
+
+
+def review(ctx, args):
+    env = tui_environment(ctx)
+    command = args["command"]
+    if command == "manage":
+        return manager(ctx)
+    if command == "capture":
+        comment = args.get("comment")
+        if comment is None:
+            comment = edit("", "Comment on: " + args["quote"][:120].replace("\n", " "))
+        if comment.strip():
+            source = f"{ctx['workspace']} / pane {ctx['source']['id']}"
+            note_id = Notes(ctx["scope"]).add(source, args["quote"], comment)
+            print(f"Saved annotation {note_id}")
+        return
+    binary = backend()
+    if command in ("last", "last-newest"):
+        agent = ctx["source"].get("agent", {})
+        host = {"opencode2": "opencode"}.get(agent.get("provider"), agent.get("provider"))
+        if not host:
+            raise Error("Source pane has no detected agent; use terminal to review its output")
+        argv = [binary, "last", "--host", host]
+        if agent.get("transcript"):
+            argv += ["--session", agent["transcript"]]
+        if agent.get("session"):
+            argv += ["--session-id", agent["session"]]
+        elif not agent.get("transcript"):
+            raise Error("Corgi has no exact session for this agent; use terminal instead of guessing a transcript")
+        if command == "last-newest":
+            argv.append("--newest")
+    elif command == "terminal":
+        env.update(HERDR_BIN_PATH=str(SELF), PLANNOTATOR_TUI_TERMINAL_PANE=str(ctx["source"]["id"]),
+                   PLANNOTATOR_TUI_TERMINAL_LINES=str(args["lines"]))
+        argv = [binary, "herdr", "pane"]
+    else:
+        argv = [binary, args["path"]]
+    result = subprocess.run(argv, env=env, cwd=ctx["cwd"])
+    if result.returncode:
+        raise Error(f"Plannotator exited {result.returncode}")
+
+
+def launch(ctx, args):
+    jobs = state_dir() / "jobs"
+    jobs.mkdir(exist_ok=True, mode=0o700)
+    path = jobs / (uuid.uuid4().hex + ".json")
+    path.write_text(json.dumps({"context": ctx, "args": args,
+                                "env": {k: os.environ[k] for k in REVIEW_ENV if k in os.environ}}))
+    command = shlex.join([sys.executable, str(SELF), "_run", str(path)])
+    try:
+        reply = corgi("pane", "split", ctx["source"]["id"], "--right", "--cwd", ctx["cwd"], "--command", command)
+    except Error:
+        # Keep the job: the runtime may have created the pane before a lost reply.
+        raise Error(f"Review launch not confirmed; inspect corgi list before retrying. Context: {path}")
+    new_pane = reply["result"]["pane"]
+    print(f"Opened annotation review in pane {new_pane}")
+    if ctx["viewer"] is not None:
+        try:
+            corgi("focus", new_pane, "--viewer", ctx["viewer"])
+        except Error as exc:
+            print(f"Review opened; select pane {new_pane} manually ({exc})", file=sys.stderr)
+
+
+def bridge(argv):
+    """The small Plannotator transport contract: prompt, pane get, pane read."""
+    if argv[:2] == ["agent", "prompt"] and len(argv) == 4:
+        target = json.loads(os.environ.get("CORGI_ANNOTATE_TARGET", "null"))
+        if not target or str(target["pane"]) != argv[2]:
+            raise Error("Missing/mismatched review target", "agent_not_found")
+        deliver(target, argv[3])
+        print(json.dumps({"result": {"sent": True}}))
+    elif argv[:2] == ["pane", "get"] and len(argv) == 3:
+        state, _ = snapshot()
+        pane = pane_by_id(state, argv[2])
+        print(json.dumps({"result": {"pane": {"agent": pane.get("agent", {}).get("provider")}}}))
+    elif argv[:2] == ["pane", "read"] and len(argv) >= 3:
+        lines = argv[argv.index("--lines") + 1] if "--lines" in argv else "200"
+        reply = corgi("--no-agent", "pane", "read", argv[2], "--lines", lines)
+        print(reply["result"]["text"], end="")
+    else:
+        raise Error("Unsupported Plannotator transport operation")
+
+
+def main(argv=None):
+    os.umask(0o077)
+    argv = list(sys.argv[1:] if argv is None else argv)
+    transport = bool(argv and argv[0] in ("agent", "pane"))
+    try:
+        if transport:
+            bridge(argv)
+            return 0
+        if argv and argv[0] == "_run":
+            path = Path(argv[1])
+            spec = json.loads(path.read_text())
+            path.unlink()
+            os.environ.update(spec["env"])
+            try:
+                review(spec["context"], spec["args"])
+            except Error as exc:
+                print(f"corgi-annotate: {exc}", file=sys.stderr)
+                if sys.stdin.isatty():
+                    input("Press Enter to close…")
+                return 1
+            return 0
+        parser = argparse.ArgumentParser(description=__doc__)
+        parser.add_argument("--version", action="version", version=VERSION)
+        parser.add_argument("command", nargs="?", default="open", choices=[
+            "setup", "panes", "open", "last", "last-newest", "terminal", "capture", "manage",
+            "export", "copy-context", "copy-archive", "paste-archive", "send-archive", "archive", "restore"])
+        parser.add_argument("path", nargs="?", help="document/folder for open, or annotation ID for archive/restore")
+        parser.add_argument("--pane", help="explicit source/recipient pane (or current); bypass automatic agent selection")
+        parser.add_argument("--viewer", type=int, help="source viewer ID for terminal/OS key bindings")
+        parser.add_argument("--to", help="deliver feedback to this agent pane instead of automatically selecting one")
+        parser.add_argument("--here", action="store_true", help="review in this terminal instead of opening a Corgi split")
+        parser.add_argument("--lines", type=int, default=200, help="terminal capture lines (1–10000)")
+        inputs = parser.add_mutually_exclusive_group()
+        inputs.add_argument("--text", help="selected terminal text to annotate")
+        inputs.add_argument("--stdin", action="store_true", help="read selected text from stdin")
+        inputs.add_argument("--file", help="read selected text from this UTF-8 file")
+        parser.add_argument("--comment", help="save a capture without opening the editor")
+        parser.add_argument("--archived", action="store_true", help="export archived notes")
+        if argv and argv[0].startswith("annotate."):
+            argv[0] = argv[0].removeprefix("annotate.")
+        args = parser.parse_args(argv)
+        if not 1 <= args.lines <= 10000:
+            parser.error("--lines must be between 1 and 10000")
+        if args.command == "setup":
+            print(backend())
+            return 0
+        if args.command == "panes":
+            state, _ = snapshot()
+            for p in state["panes"]:
+                a = p.get("agent", {})
+                print(f"{p['id']:>4}  {a.get('provider') or 'shell':<12} {a.get('state', ''):<12} {p.get('cwd', '')}")
+            return 0
+        ctx = context(args)
+        values = vars(args).copy()
+        if args.command == "capture":
+            quote = (args.text if args.text is not None else sys.stdin.read() if args.stdin else
+                     Path(args.file).read_text() if args.file else clipboard())
+            if not quote.strip():
+                raise Error("No text selected; copy text or use --stdin/--file/--text")
+            values["quote"] = quote
+        if args.command == "open":
+            values["path"] = str(Path(args.path).expanduser().resolve() if args.path else Path(ctx["cwd"]))
+            if not Path(values["path"]).exists():
+                raise Error(f"No such file or folder: {values['path']}")
+        if args.command in ("open", "last", "last-newest", "terminal", "capture", "manage"):
+            if args.here or (args.command == "capture" and args.comment is not None):
+                review(ctx, values)
+            else:
+                if args.command not in ("capture", "manage"):
+                    backend()
+                launch(ctx, values)
+        else:
+            notes = Notes(ctx["scope"])
+            if args.command == "export":
+                print(render(notes.rows(args.archived)), end="")
+            elif args.command in ("archive", "restore"):
+                if not args.path or not args.path.isdecimal():
+                    raise Error("Specify an annotation ID")
+                notes.change(int(args.path), archived=args.command == "archive")
+            else:
+                notes.handoff(args.command, ctx["target"])
+                print("Annotations copied/delivered" + (" and archived" if args.command.endswith("archive") else ""))
+        return 0
+    except (Error, OSError, ValueError, sqlite3.Error) as exc:
+        if transport:
+            print(json.dumps({"error": {"code": getattr(exc, "code", "annotate_error"), "message": str(exc)}}), file=sys.stderr)
+        else:
+            print(f"corgi-annotate: {exc}", file=sys.stderr)
+        return 1
+    except (KeyboardInterrupt, EOFError):
+        return 130
+
+
+if __name__ == "__main__":
+    sys.exit(main())

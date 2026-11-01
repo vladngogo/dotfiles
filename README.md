@@ -26,6 +26,7 @@ Corgi's native theme and shortcuts with a Ctrl-a prefix for terminals and agents
   binaries. `install.sh` installs Corgi when it is missing using its
   [official installer](https://corgi.computer/install.sh), pinned to a release and
   SHA-256 checksum before execution. This requires `curl` and `sha256sum` or `shasum`.
+- **Python 3.9+** for `corgi-annotate`, the terminal/document annotation CLI.
 
 `install.sh` warns if the tree-sitter CLI is missing, too old, or built for the wrong
 architecture, but does not install it for you.
@@ -71,6 +72,25 @@ Fresh installations bootstrap release `20261030T200700Z-f539bbadd798`. To bump
 that baseline, review the new versioned `releases/<version>/install.sh`, update
 both `version` and `expected` in `install_corgi()`, and rerun the checks below.
 
+### Annotations with Corgi
+
+The installer also links `corgi-annotate`, a Herdr Annotate-style replacement using
+Plannotator TUI. Run `corgi-annotate setup` to install its checksum-pinned backend.
+
+```bash
+corgi-annotate open plan.md          # review a document in a new split
+corgi-annotate last-newest           # annotate the latest assistant reply
+corgi-annotate terminal              # annotate this pane's terminal output
+```
+
+Run from a Corgi shell: the workspace's sole agent is selected automatically;
+multiple agents get a named picker. `--pane` and `--to` provide explicit overrides.
+
+Use `c` to comment, Enter to save, and `E` to send feedback. In Neovim, visual-mode
+**Space a** captures selected text as a persistent note. See the
+[annotation guide](corgi/ANNOTATE.md) for capture management, targeting, SSH,
+clipboard support, and migration details.
+
 ## Structure
 
 ```
@@ -79,7 +99,9 @@ nvim/
   lazy-lock.json    — plugin lockfile
 corgi/
   viewer.json       — first-run preferences (Corgi preset/theme, Ctrl-a prefix)
-tests/              — installer regression tests (isolated homes, no network)
+  bin/corgi-annotate — document/reply reviews and persistent terminal notes (→ ~/.local/bin)
+  ANNOTATE.md       — annotation commands, targeting and migration guide
+tests/              — installer/annotation regression tests and opt-in live smoke test
 agents/             — tool-agnostic agent config (the source of truth)
   AGENTS.md         — global instructions, linked for every agent tool
   skills/<name>/    — SKILL.md skills (build-evals, fold-or-keep)
@@ -175,6 +197,7 @@ Leader key is **Space**.
 | `Space rn` | Rename symbol |
 | `Space ca` | Code action |
 | `Space f` | Format file |
+| `Space a` (visual mode) | Capture selection as a Corgi annotation |
 
 ### Git
 
