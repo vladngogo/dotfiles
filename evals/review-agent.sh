@@ -19,6 +19,7 @@ set -euo pipefail
 : "${REVIEW_EVAL_ROOT:?set to the checkout whose reviewer is under test}"
 model="${REVIEW_MODEL:-deepseek-flash}"
 max_turns="${REVIEW_MAX_TURNS:-}"
+[[ "$max_turns" =~ ^[0-9]*$ ]] || { echo "REVIEW_MAX_TURNS must be a whole number" >&2; exit 64; }
 key_file="${DEEPSEEK_KEY_FILE:-$HOME/.config/deepseek/api_key}"
 
 case_prompt="$(cat)"
