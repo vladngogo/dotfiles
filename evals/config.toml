@@ -1,6 +1,6 @@
 # Evals for the PR reviewer (.github/review-prompt.md + model). Run from the
-# repo root with REVIEW_EVAL_ROOT set to it. The defaults (deepseek-flash, 30
-# turns) match CI; override REVIEW_MODEL / REVIEW_MAX_TURNS to compare:
+# repo root with REVIEW_EVAL_ROOT set to it. The defaults (deepseek-flash, no
+# turn cap) match CI; override REVIEW_MODEL / REVIEW_MAX_TURNS to compare:
 #
 #   REVIEW_EVAL_ROOT=$PWD agent-eval run --label "flash-$(date +%F)"
 #   REVIEW_EVAL_ROOT=$PWD REVIEW_MODEL=deepseek-v4-pro agent-eval run --label "pro-$(date +%F)"

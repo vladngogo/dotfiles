@@ -8,7 +8,7 @@
 # "PR_HEAD=<commit>". Env:
 #   REVIEW_EVAL_ROOT  checkout whose reviewer prompt is under test (required)
 #   REVIEW_MODEL      DeepSeek model (default deepseek-flash, as in CI)
-#   REVIEW_MAX_TURNS  turn cap (default 30, as in CI)
+#   REVIEW_MAX_TURNS  optional turn cap (none by default, as in CI)
 #   DEEPSEEK_KEY_FILE file holding the API key (default ~/.config/deepseek/api_key)
 #
 # Prints the review, then one JSON line with model, cost, turns and verdict.
@@ -18,7 +18,7 @@ set -euo pipefail
 
 : "${REVIEW_EVAL_ROOT:?set to the checkout whose reviewer is under test}"
 model="${REVIEW_MODEL:-deepseek-flash}"
-max_turns="${REVIEW_MAX_TURNS:-30}"
+max_turns="${REVIEW_MAX_TURNS:-}"
 key_file="${DEEPSEEK_KEY_FILE:-$HOME/.config/deepseek/api_key}"
 
 case_prompt="$(cat)"
@@ -56,7 +56,7 @@ ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic \
 ANTHROPIC_API_KEY="$(<"$key_file")" \
 CLAUDE_CONFIG_DIR="$tmp/claude-config" \
 env -u ANTHROPIC_AUTH_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN \
-claude -p --model "$model" --max-turns "$max_turns" --setting-sources user \
+claude -p --model "$model" ${max_turns:+--max-turns "$max_turns"} --setting-sources user \
     --tools Read,Grep,Glob --allowedTools Read,Grep,Glob \
     --json-schema '{"type":"object","properties":{"verdict":{"type":"string","enum":["looks good","needs changes"]}},"required":["verdict"]}' \
     --output-format stream-json --verbose < "$tmp/prompt" > "$tmp/stream.jsonl" || rc=$?
@@ -68,8 +68,8 @@ jq -r 'select(.type == "assistant") | .message.content[]? | select(.type == "tex
 echo
 jq -s 'map(select(.type == "result")) | last // {}' "$tmp/stream.jsonl" > "$tmp/out.json"
 jq -r '.structured_output.verdict // "none"' "$tmp/out.json" > "$(git rev-parse --git-dir)/eval-verdict"
-jq -c --arg model "$model" --argjson max_turns "$max_turns" \
-    '{model: $model, max_turns: $max_turns, total_cost_usd, num_turns, duration_ms, subtype,
+jq -c --arg model "$model" --arg max_turns "$max_turns" \
+    '{model: $model, max_turns: ($max_turns | if . == "" then null else tonumber end), total_cost_usd, num_turns, duration_ms, subtype,
       verdict: (.structured_output.verdict // null)}' "$tmp/out.json"
 
 # A crash, API error or turn cap fails the run even if review text came out.

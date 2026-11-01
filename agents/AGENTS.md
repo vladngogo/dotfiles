@@ -65,6 +65,10 @@ Opening a PR means seeing it through to merge, without waiting to be asked:
 
 - Work in a worktree on its own branch, never in a checkout another session
   may be using.
+- Before opening the PR, and before every push to it, run the repo's tests and
+  linters and a local code review of the branch (in Claude Code:
+  `/code-review`), fix what they find, then re-read your own diff looking for
+  what's wrong. CI review should confirm, not discover.
 - After pushing, watch the PR: wait for checks (`gh pr checks <n> --watch`)
   and for the review of the current head commit.
 - Handle each review as above, push, and wait for the re-review. If you only
