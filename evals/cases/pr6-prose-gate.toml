@@ -1,0 +1,19 @@
+# PR #6, first round. The reviewer caught that the new merge rule in
+# AGENTS.md was prose only, against AGENTS.md's own "hard rules belong in
+# tools, hooks, or CI" rule.
+id = "pr6-prose-gate"
+base = "911b7d6"
+
+prompt = """
+PR_BASE=5dd6af6
+PR #6: Add a PR policy: watch, answer review, merge when it passes.
+Adds a "Pull requests" section to agents/AGENTS.md.
+"""
+
+checks = [
+  'test "$(cat "$(git rev-parse --git-dir)/eval-verdict")" = "needs changes"',
+]
+
+rubric = [
+  "The review reports that the new merge condition is only written in prose and nothing (CI, branch protection, a hook) enforces it, contrary to AGENTS.md's rule that hard rules belong in tools, hooks, or CI.",
+]

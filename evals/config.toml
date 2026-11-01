@@ -1,0 +1,11 @@
+# Evals for the PR reviewer (.github/review-prompt.md + model). Run from the
+# repo root with REVIEW_EVAL_ROOT set to it; pick the model with REVIEW_MODEL:
+#
+#   REVIEW_EVAL_ROOT=$PWD REVIEW_MODEL=deepseek-flash agent-eval run --label flash
+#
+# Cases replay a past PR at a pinned commit. The reviewer only reads; the
+# grader is the local Claude Code, independent of the model under test.
+agent = '"$REVIEW_EVAL_ROOT/evals/review-agent.sh"'
+runs = 3
+jobs = 3
+timeout_s = 900
