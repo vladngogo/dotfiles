@@ -13,6 +13,10 @@ Adds read-only Bash permission rules to claude/settings.json, which
 install.sh merges into ~/.claude/settings.json.
 """
 
+checks = [
+  'test "$(cat "$(git rev-parse --git-dir)/eval-verdict")" = "needs changes"',
+]
+
 rubric = [
   "The review does not state as fact that a `Bash(cmd *)` rule fails to match the bare command `cmd` with no arguments. Passing it if the point is absent, or raised only as an explicit question or unverified concern that does not block the merge.",
   "The review reports that `Bash(journalctl *)` also allows flags that change or delete the journal (such as --vacuum-*, --rotate or --flush).",
