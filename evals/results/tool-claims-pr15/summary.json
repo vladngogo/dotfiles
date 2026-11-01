@@ -1,0 +1,22 @@
+{
+  "label": "tool-claims-pr15",
+  "config": {
+    "agent": "\"$REVIEW_EVAL_ROOT/evals/review-agent.sh\"",
+    "grader": "claude -p --output-format text --tools ''",
+    "setup": "",
+    "runs": 4,
+    "jobs": 15,
+    "timeout_s": 1200,
+    "env": {}
+  },
+  "cases": {
+    "pr15-tool-claims": {
+      "pass_rate": 1.0,
+      "passed": 4,
+      "runs": 4,
+      "violations": 0,
+      "mean_cost_usd": 0.5751,
+      "mean_wall_s": 148.5
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "label": "narrow-hookdup",
+  "config": {
+    "agent": "\"$REVIEW_EVAL_ROOT/evals/review-agent.sh\"",
+    "grader": "claude -p --output-format text --tools ''",
+    "setup": "",
+    "runs": 9,
+    "jobs": 15,
+    "timeout_s": 1200,
+    "env": {}
+  },
+  "cases": {
+    "pr5-hook-dup": {
+      "pass_rate": 0.8888888888888888,
+      "passed": 8,
+      "runs": 9,
+      "violations": 0,
+      "mean_cost_usd": 0.8994,
+      "mean_wall_s": 233.2
+    }
+  }
+}

@@ -1,0 +1,24 @@
+# PR #15, first round. The reviewer rightly flagged that Bash(journalctl *)
+# also allows journal-changing flags, but also claimed, inferring it from the
+# PR's own extra `Bash(lspci)` entries, that `Bash(cmd *)` doesn't match a
+# bare `cmd`. That's false: a test with `claude -p --settings` showed bare
+# `lsblk` allowed by `Bash(lsblk *)`. The claim cost a reply and a re-review.
+id = "pr15-tool-claims"
+base = "6c867f7"   # the PR's base; the reviewer checks out PR_HEAD
+
+prompt = """
+PR_HEAD=cec6531
+PR #15: Allow read-only system queries without a permission prompt.
+Adds read-only Bash permission rules to claude/settings.json, which
+install.sh merges into ~/.claude/settings.json.
+"""
+
+checks = [
+  'test "$(cat "$(git rev-parse --git-dir)/eval-verdict")" = "needs changes"',
+]
+
+rubric = [
+  "The review does not state as fact that a `Bash(cmd *)` rule fails to match the bare command `cmd` with no arguments. Passing it if the point is absent, or raised only as an explicit question or unverified concern that does not block the merge.",
+  "The review reports that `Bash(journalctl *)` also allows flags that change or delete the journal (such as --vacuum-*, --rotate or --flush).",
+  "Every finding the review reports points at something real in the diff; none is invented or plainly wrong.",
+]
