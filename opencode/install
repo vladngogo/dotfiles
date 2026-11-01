@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+"""Install the thin OpenCode adapter and retire known, obsolete integrations."""
+import json
+import os
+import shutil
+import sys
+from pathlib import Path
+from uuid import uuid4
+
+
+def install(root, config):
+    config.mkdir(parents=True, exist_ok=True)
+    archive = config / "retired" / uuid4().hex
+
+    def retire(path):
+        destination = archive / path.relative_to(config)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(path), str(destination))
+        print(f"Archived {path} → {destination}")
+
+    def old_link(path, source):
+        return path.is_symlink() and os.readlink(path) == str(source) and not path.exists()
+
+    # Parse before changing anything: malformed or externally managed CLI files
+    # must not leave a partially retired plugin setup.
+    cli = config / "cli.json"
+    if cli.is_symlink():
+        raise ValueError(f"{cli} is a symlink; manage its plugins at the source")
+    settings = json.loads(cli.read_text()) if cli.exists() else None
+    if settings is not None and not isinstance(settings, dict):
+        raise ValueError(f"{cli} must contain a JSON object")
+
+    retired_plugins = set()
+    for name in ("opencode.jsonc", "skills", "agents/architect.md",
+                 "agents/builder.md", "architect-handoff"):
+        path = config / name
+        if old_link(path, root / "opencode" / name):
+            retire(path)
+            if name == "architect-handoff":
+                retired_plugins.add("./architect-handoff")
+
+    # Only retire files bearing the old installer's ownership markers.
+    for name, marker in (
+        ("plugins/herdr-agent-state.js", "HERDR_INTEGRATION_ID=opencode\n"),
+        ("herdr-opencode/tui.js", "HERDR_INTEGRATION_ID=opencode-tui-v2\n"),
+        ("herdr-tui-session.js", "HERDR_INTEGRATION_ID=opencode-tui\n"),
+    ):
+        path = config / name
+        if path.is_file() and not path.is_symlink():
+            text = path.read_text()
+            if "// installed by herdr\n" in text and marker in text:
+                retire(path)
+                if name == "herdr-opencode/tui.js":
+                    retired_plugins.add("./herdr-opencode")
+                if name == "herdr-tui-session.js":
+                    retired_plugins.add("./herdr-tui-session.js")
+
+    legacy = config / "tui.jsonc"
+    if legacy.is_file() and not legacy.is_symlink():
+        try:
+            legacy_settings = json.loads(legacy.read_text())
+        except json.JSONDecodeError:
+            legacy_settings = None
+        if (legacy_settings == {"plugin": ["./herdr-tui-session.js"]}
+                and "./herdr-tui-session.js" in retired_plugins):
+            retire(legacy)
+
+    if settings is not None and isinstance(settings.get("plugins"), list):
+        plugins = settings["plugins"]
+        kept = [p for p in plugins if
+                (p.get("package") if isinstance(p, dict) else p) not in retired_plugins]
+        if kept != plugins:
+            settings["plugins"] = kept
+            destination = archive / "cli.json"
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(cli, destination)
+            cli.write_text(json.dumps(settings, indent=2) + "\n")
+
+    def link(source, target):
+        if target.is_symlink() and target.resolve() == source.resolve():
+            return
+        if target.exists() or target.is_symlink():
+            retire(target)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.symlink_to(source)
+        print(f"Linked {target} → {source}")
+
+    link(root / "agents/AGENTS.md", config / "AGENTS.md")
+    # Do not write through a user-managed directory symlink.
+    skills = config / "skills"
+    if skills.is_symlink():
+        raise ValueError(f"{skills} is an unmanaged symlink; use a directory for per-skill links")
+    for source in sorted((root / "agents/skills").iterdir()):
+        if (source / "SKILL.md").is_file():
+            link(source, skills / source.name)
+
+
+if __name__ == "__main__":
+    try:
+        install(Path(sys.argv[1]).absolute(), Path(sys.argv[2]).absolute())
+    except (ValueError, OSError) as error:
+        sys.exit(str(error))

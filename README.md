@@ -138,6 +138,8 @@ claude/             — thin Claude Code adapter
   CLAUDE.md         — only `@~/.claude/AGENTS.md`
   settings.json     — deny reads of secrets, wires the git guard hook
   merge-settings    — merge settings.json into ~/.claude/settings.json (install.sh)
+opencode/           — thin OpenCode V2 adapter
+  install           — link shared instructions/skills and archive stale integrations
 ```
 
 ### Agents
@@ -159,7 +161,8 @@ break go in CODEOWNERS, branch protection, hooks or CI, not only in prose.
 Run `agent-link --init` in a fresh clone to attach (or create) your notes. It
 hides the link with `.git/info/exclude`, so the team's `.gitignore` is untouched.
 
-`install.sh` links individual items into `~/.claude/` and `~/.codex/`, never
+`install.sh` links individual items into `~/.claude/`, `~/.codex/`, and
+`${XDG_CONFIG_HOME:-~/.config}/opencode/`, never
 the whole directory, because those also hold credentials and session history.
 `settings.json` is the exception: Claude Code (`/config`) and Corgi rewrite it,
 so `claude/merge-settings` adds the repo's deny rules and hooks to the local
@@ -167,6 +170,13 @@ file instead, keeping everything already there. To share a new setting, add it
 to `claude/settings.json` and re-run `install.sh`; removing one from the repo
 does not remove it locally, and a repo hook deleted locally comes back on the
 next install (remove it from the repo to opt out).
+
+OpenCode gets `AGENTS.md` and individual shared skill links. Server configuration
+and `cli.json` preferences stay local; no custom agents or plugins are required.
+The installer archives dangling links to this checkout's old OpenCode files and
+Herdr-marked integrations under the OpenCode config directory's `retired/` folder,
+removing their CLI plugin references while preserving other preferences. Original
+CLI settings are backed up there. Unrelated plugins and configuration are preserved.
 
 Skills go stale as models improve. Before adding one, check the model doesn't
 already do the task well without it, and prune ones that no longer earn their
