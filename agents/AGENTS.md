@@ -29,12 +29,25 @@ Applies in every repo. A repo's own `AGENTS.md` overrides anything here.
 
 ## Working rules
 
+- Check before building: look for a built-in command, an installed skill or
+  plugin, a packaged tool, or something in my dotfiles that already does the
+  job, and propose reuse first.
+- Check facts about the machine (hardware, distro, versions) with a command
+  before relying on them.
 - Verify before claiming done: run the repo's tests/linters on what you changed
   and report failures as they are.
 - One change at a time when tuning agent behaviour; measure before and after.
 - Hard rules belong in tools, hooks, or CI, not only in prose. If a rule here
   matters enough to never break, it should also be enforced somewhere.
 - Never commit secrets, credentials, or machine-specific paths.
+
+## Commands I run
+
+- sudo can't prompt in your shell, so don't try it. Give me every root command
+  in one copy-paste block per host, labelled with the host, and wait for me to
+  confirm I ran it.
+- Single-quote anything containing `!`: my interactive shell does history
+  expansion.
 
 ## Responding to review
 
