@@ -1,0 +1,54 @@
+{
+  "label": "flash",
+  "config": {
+    "agent": "\"$REVIEW_EVAL_ROOT/evals/review-agent.sh\"",
+    "grader": "claude -p --output-format text --tools ''",
+    "setup": "",
+    "runs": 3,
+    "jobs": 15,
+    "timeout_s": 900,
+    "env": {}
+  },
+  "cases": {
+    "pr5-clean": {
+      "pass_rate": 1.0,
+      "passed": 3,
+      "runs": 3,
+      "violations": 0,
+      "mean_cost_usd": 0.6268,
+      "mean_wall_s": 149.1
+    },
+    "pr5-hook-dup": {
+      "pass_rate": 1.0,
+      "passed": 3,
+      "runs": 3,
+      "violations": 0,
+      "mean_cost_usd": 1.0193,
+      "mean_wall_s": 259.3
+    },
+    "pr5-missing-test": {
+      "pass_rate": 1.0,
+      "passed": 3,
+      "runs": 3,
+      "violations": 0,
+      "mean_cost_usd": 0.7164,
+      "mean_wall_s": 180.6
+    },
+    "pr6-prose-gate": {
+      "pass_rate": 1.0,
+      "passed": 3,
+      "runs": 3,
+      "violations": 0,
+      "mean_cost_usd": 0.2474,
+      "mean_wall_s": 59.8
+    },
+    "pr7-clean": {
+      "pass_rate": 1.0,
+      "passed": 3,
+      "runs": 3,
+      "violations": 0,
+      "mean_cost_usd": 1.2498,
+      "mean_wall_s": 299.7
+    }
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "label": "pro",
+  "config": {
+    "agent": "\"$REVIEW_EVAL_ROOT/evals/review-agent.sh\"",
+    "grader": "claude -p --output-format text --tools ''",
+    "setup": "",
+    "runs": 3,
+    "jobs": 15,
+    "timeout_s": 900,
+    "env": {}
+  },
+  "cases": {
+    "pr5-clean": {
+      "pass_rate": 0.6666666666666666,
+      "passed": 2,
+      "runs": 3,
+      "violations": 0,
+      "mean_cost_usd": 0.6774,
+      "mean_wall_s": 315.5
+    },
+    "pr5-hook-dup": {
+      "pass_rate": 0.6666666666666666,
+      "passed": 2,
+      "runs": 3,
+      "violations": 0,
+      "mean_cost_usd": 1.1763,
+      "mean_wall_s": 535.2
+    },
+    "pr5-missing-test": {
+      "pass_rate": 0.6666666666666666,
+      "passed": 2,
+      "runs": 3,
+      "violations": 0,
+      "mean_cost_usd": 0.5434,
+      "mean_wall_s": 258.3
+    },
+    "pr6-prose-gate": {
+      "pass_rate": 0.3333333333333333,
+      "passed": 1,
+      "runs": 3,
+      "violations": 0,
+      "mean_cost_usd": 0.1215,
+      "mean_wall_s": 53.1
+    },
+    "pr7-clean": {
+      "pass_rate": 1.0,
+      "passed": 3,
+      "runs": 3,
+      "violations": 0,
+      "mean_cost_usd": 0.7456,
+      "mean_wall_s": 330.5
+    }
+  }
+}

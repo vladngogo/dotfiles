@@ -1,0 +1,19 @@
+# PR #5, final round: both findings fixed; the reviewer approved it.
+# Catches a model that finds problems in everything.
+id = "pr5-clean"
+base = "205fed3"   # the PR's base; the reviewer checks out PR_HEAD
+
+prompt = """
+PR_HEAD=7495766
+PR #5: Merge Claude settings into the local file instead of linking it.
+claude/merge-settings merges claude/settings.json into ~/.claude/settings.json;
+hooks are keyed by command per event so a repo hook is added only once.
+"""
+
+checks = [
+  'test "$(cat "$(git rev-parse --git-dir)/eval-verdict")" = "looks good"',
+]
+
+rubric = [
+  "The review raises no finding that would block the merge, or any blocking finding it raises is a real defect in the diff.",
+]

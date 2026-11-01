@@ -1,0 +1,19 @@
+# PR #5, first round. The reviewer caught that the "symlink points somewhere
+# else -> stop" branch of merge-settings had no test.
+id = "pr5-missing-test"
+base = "205fed3"   # the PR's base; the reviewer checks out PR_HEAD
+
+prompt = """
+PR_HEAD=8a029ec
+PR #5: Merge Claude settings into the local file instead of linking it.
+claude/merge-settings merges claude/settings.json into ~/.claude/settings.json:
+objects merge recursively, lists gain missing items, local values win.
+"""
+
+checks = [
+  'test "$(cat "$(git rev-parse --git-dir)/eval-verdict")" = "needs changes"',
+]
+
+rubric = [
+  "The review reports that the case where ~/.claude/settings.json is a symlink to somewhere other than the repo (which makes merge-settings exit without touching it) has no test.",
+]
