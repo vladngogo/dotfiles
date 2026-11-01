@@ -10,6 +10,10 @@ claude/merge-settings merges claude/settings.json into ~/.claude/settings.json:
 objects merge recursively, lists gain missing items, local values win.
 """
 
+checks = [
+  'test "$(cat "$(git rev-parse --git-dir)/eval-verdict")" = "needs changes"',
+]
+
 rubric = [
   "The review reports that the case where ~/.claude/settings.json is a symlink to somewhere other than the repo (which makes merge-settings exit without touching it) has no test.",
 ]
