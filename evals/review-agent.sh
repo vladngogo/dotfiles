@@ -49,9 +49,13 @@ env -u ANTHROPIC_AUTH_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN \
 claude -p --model "$model" --max-turns 15 --setting-sources project \
     --tools Read,Grep,Glob --allowedTools Read,Grep,Glob \
     --json-schema '{"type":"object","properties":{"verdict":{"type":"string","enum":["looks good","needs changes"]}},"required":["verdict"]}' \
-    --output-format json < "$tmp/prompt" > "$tmp/out.json" || true
+    --output-format stream-json --verbose < "$tmp/prompt" > "$tmp/stream.jsonl" || true
 
-jq -r '.structured_output.verdict // "none"' "$tmp/out.json" > "$(git rev-parse --git-dir)/eval-verdict"
-jq -r '.result // "(no result)"' "$tmp/out.json"
+# With a schema the final result holds only the verdict, so take the review
+# text from the assistant messages instead.
+jq -r 'select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text' \
+    "$tmp/stream.jsonl"
 echo
+jq -s 'map(select(.type == "result")) | last // {}' "$tmp/stream.jsonl" > "$tmp/out.json"
+jq -r '.structured_output.verdict // "none"' "$tmp/out.json" > "$(git rev-parse --git-dir)/eval-verdict"
 jq -c '{total_cost_usd, num_turns, duration_ms, subtype, verdict: (.structured_output.verdict // null)}' "$tmp/out.json"
