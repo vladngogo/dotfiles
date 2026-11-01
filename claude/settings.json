@@ -22,17 +22,24 @@
       "Bash(systemctl status *)",
       "Bash(systemctl --user status *)",
       "Bash(sensors *)",
-      "Bash(sensors)",
       "Bash(dpkg -l *)",
       "Bash(apt-cache policy *)",
       "Bash(apt list *)",
       "Bash(lspci *)",
-      "Bash(lspci)",
       "Bash(lsmod)",
       "Bash(swapon --show *)",
       "Bash(findmnt *)",
-      "Bash(lsusb *)",
-      "Bash(lsusb)"
+      "Bash(lsusb *)"
+    ],
+    "ask": [
+      "Bash(journalctl *--vacuum*)",
+      "Bash(journalctl *--rotate*)",
+      "Bash(journalctl *--flush*)",
+      "Bash(journalctl *--sync*)",
+      "Bash(journalctl *--relinquish-var*)",
+      "Bash(journalctl *--smart-relinquish-var*)",
+      "Bash(journalctl *--setup-keys*)",
+      "Bash(journalctl *--update-catalog*)"
     ]
   },
   "hooks": {
