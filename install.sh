@@ -121,6 +121,9 @@ esac
 # Codex reads ~/.codex/AGENTS.md directly.
 link "$AGENTS_SRC/AGENTS.md" "$HOME/.codex/AGENTS.md"
 
+# OpenCode V2 reads AGENTS.md directly. Keep preferences and runtime state local.
+python3 "$DOTFILES/opencode/install" "$DOTFILES" "${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
+
 
 # ── treesitter prerequisites ──────────────────────────────────
 # nvim-treesitter (main branch) shells out to `tree-sitter build` for every
