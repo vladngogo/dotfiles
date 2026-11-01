@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+"""lint-edit — run shellcheck on a shell script an agent just wrote or edited.
+
+Input: a file path as argv[1], or a Claude Code PostToolUse JSON payload on
+stdin (tool_input.file_path). A file is checked if it ends in .sh/.bash or has
+an sh/bash shebang. Exit 2 when shellcheck reports problems; the stderr output
+is shown to the agent so it can fix them before running the script. Anything
+else, including shellcheck not being installed, exits 0.
+"""
+from __future__ import annotations
+
+import json
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+SHELL_SUFFIXES = {".sh", ".bash"}
+SHEBANG = re.compile(rb"^#!\s*(\S*/)?(env\s+)?(ba)?sh\b")
+
+
+def is_shell(path: Path) -> bool:
+    if path.suffix in SHELL_SUFFIXES:
+        return True
+    if path.suffix:
+        return False
+    try:
+        with path.open("rb") as f:
+            return bool(SHEBANG.match(f.readline()))
+    except OSError:
+        return False
+
+
+def main() -> int:
+    if len(sys.argv) > 1:
+        file_path = sys.argv[1]
+    else:
+        try:
+            file_path = json.load(sys.stdin).get("tool_input", {}).get("file_path", "")
+        except (json.JSONDecodeError, AttributeError):
+            return 0
+    if not file_path:
+        return 0
+    path = Path(file_path)
+    shellcheck = shutil.which("shellcheck")
+    if not shellcheck or not path.is_file() or not is_shell(path):
+        return 0
+    # Run from the script's directory so `source` paths and .shellcheckrc resolve.
+    result = subprocess.run(
+        [shellcheck, "--external-sources", path.name],
+        cwd=path.parent, capture_output=True, text=True,
+    )
+    if result.returncode == 0:
+        return 0
+    print(f"shellcheck found problems in {file_path}:\n{result.stdout}{result.stderr}",
+          file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

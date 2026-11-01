@@ -130,13 +130,14 @@ agents/             — tool-agnostic agent config (the source of truth)
   AGENTS.md         — global instructions, linked for every agent tool
   skills/<name>/    — SKILL.md skills (build-evals, fold-or-keep)
   hooks/guard-bash  — blocks pushes to main/master, force pushes, and credential-path access
+  hooks/lint-edit   — runs shellcheck on shell scripts right after an agent edits them
   bin/agent-eval    — eval loop: run cases in parallel worktrees, grade, compare (→ ~/.local/bin)
   bin/agent-link    — attach repos/<repo>.md to a repo as CLAUDE.local.md, uncommitted
   repos/<repo>.md   — personal notes for one repo
   tests/            — `python3 -m unittest discover -s agents/tests`
 claude/             — thin Claude Code adapter
   CLAUDE.md         — imports `~/.claude/AGENTS.md` and, if present, `~/.claude/local.md`
-  settings.json     — deny reads of secrets, wires the git guard hook
+  settings.json     — deny reads of secrets, wires the guard and lint hooks
   merge-settings    — merge settings.json into ~/.claude/settings.json (install.sh)
 opencode/           — thin OpenCode V2 adapter
   install           — link shared instructions/skills and archive stale integrations
