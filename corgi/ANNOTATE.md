@@ -32,8 +32,9 @@ corgi-annotate terminal        # review this pane's recent terminal output
 
 Agent selection is automatic: use the calling agent, or the sole running agent
 in the current workspace. If there are several, a numbered picker shows their
-names, providers and states. Choose a number, or `q` to cancel. No pane-ID lookup
-is needed. `last` reads the selected agent's reply; `terminal` keeps reading the
+names, providers and states. Choose a number, or `q` to cancel. The agent you
+chose last in this workspace is marked `(last)`; press Enter to choose it again.
+No pane-ID lookup is needed. `last` reads the selected agent's reply; `terminal` keeps reading the
 calling pane and sends feedback to the selected agent. `open` keeps the calling
 pane's working directory.
 
@@ -167,6 +168,7 @@ If detection is incomplete or the host's transcript format is unsupported, use
 | Item | Location / override |
 |---|---|
 | Captured notes | `${XDG_STATE_HOME:-~/.local/state}/corgi-annotate/annotations.sqlite3` |
+| Last chosen agent per workspace | Same directory, `last-agent.json` |
 | Pending split launch context | Same directory, `jobs/`; consumed when the review starts, removed after a day if unused |
 | Backend binary | `${XDG_DATA_HOME:-~/.local/share}/corgi-annotate/bin/plannotator-tui-v0.9.9` |
 | Document notes/history | Plannotator data directory; override with `PLANNOTATOR_DATA_DIR` |

@@ -213,45 +213,112 @@ if os.environ.get('TUI_SEND'):
         self.assertIn("--to ID", result.stderr)
         self.assertFalse((self.root / "tui.json").exists())
 
+    def picker(self, answer, *args):
+        """Run a review through the real terminal picker; return (exit code, output)."""
+        (self.root / "tui.json").unlink(missing_ok=True)
+        pid, fd = pty.fork()
+        if pid == 0:
+            os.execv(sys.executable, [sys.executable, str(SCRIPT), *(args or ("last", "--here"))])
+        output = b""
+        sent = False
+        status = None
+        deadline = time.monotonic() + 15
+        try:
+            while time.monotonic() < deadline:
+                if select.select([fd], [], [], 0.1)[0]:
+                    try:
+                        chunk = os.read(fd, 65536)
+                    except OSError:
+                        chunk = b""
+                    output += chunk
+                if b"Agent number" in output and not sent:
+                    os.write(fd, answer)
+                    sent = True
+                finished, status_value = os.waitpid(pid, os.WNOHANG)
+                if finished:
+                    status = status_value
+                    break
+            self.assertIsNotNone(status, output.decode())
+            return os.waitstatus_to_exitcode(status), output.decode()
+        finally:
+            os.close(fd)
+            if status is None:
+                os.kill(pid, 9)
+                os.waitpid(pid, 0)
+
+    def delivered_to(self):
+        return json.loads((self.root / "tui.json").read_text())["env"]["PLANNOTATOR_TUI_DELIVER_TO"]
+
     def test_real_terminal_picker_selects_named_agent_and_cancels(self):
         os.environ["CORGI_PANE"] = "8"
         self.add_agent()
         for answer, expected in ((b"bad\n2\n", 0), (b"q\n", 1)):
             with self.subTest(answer=answer):
-                pid, fd = pty.fork()
-                if pid == 0:
-                    os.execv(sys.executable, [sys.executable, str(SCRIPT), "last", "--here"])
-                output = b""
-                sent = False
-                status = None
-                deadline = time.monotonic() + 15
-                try:
-                    while time.monotonic() < deadline:
-                        if select.select([fd], [], [], 0.1)[0]:
-                            try:
-                                chunk = os.read(fd, 65536)
-                            except OSError:
-                                chunk = b""
-                            output += chunk
-                        if b"Agent number" in output and not sent:
-                            os.write(fd, answer)
-                            sent = True
-                        finished, status_value = os.waitpid(pid, os.WNOHANG)
-                        if finished:
-                            status = status_value
-                            break
-                    self.assertIsNotNone(status, output.decode())
-                    self.assertEqual(os.waitstatus_to_exitcode(status), expected, output.decode())
-                    self.assertIn(b"Second agent", output)
-                    if expected == 0:
-                        call = json.loads((self.root / "tui.json").read_text())
-                        self.assertIn("/exact/second.jsonl", call["args"])
-                        self.assertEqual(call["env"]["PLANNOTATOR_TUI_DELIVER_TO"], "9")
-                finally:
-                    os.close(fd)
-                    if status is None:
-                        os.kill(pid, 9)
-                        os.waitpid(pid, 0)
+                code, output = self.picker(answer)
+                self.assertEqual(code, expected, output)
+                self.assertIn("Second agent", output)
+                if expected == 0:
+                    call = json.loads((self.root / "tui.json").read_text())
+                    self.assertIn("/exact/second.jsonl", call["args"])
+                    self.assertEqual(call["env"]["PLANNOTATOR_TUI_DELIVER_TO"], "9")
+
+    def test_picker_offers_last_choice_as_enter_default(self):
+        os.environ["CORGI_PANE"] = "8"
+        self.add_agent()
+        code, output = self.picker(b"\n")
+        self.assertEqual(code, 1, output)  # nothing remembered yet: Enter cancels
+        self.assertEqual(self.picker(b"2\n")[0], 0)
+        code, output = self.picker(b"\n", "terminal", "--here")
+        self.assertEqual(code, 0, output)
+        self.assertIn("Enter for 2", output)
+        self.assertEqual(self.delivered_to(), "9")
+        # Choosing another agent replaces the default.
+        self.assertEqual(self.picker(b"1\n")[0], 0)
+        self.assertEqual(self.picker(b"\n")[0], 0)
+        self.assertEqual(self.delivered_to(), "7")
+
+    def test_picker_eof_cancels_even_with_default(self):
+        os.environ["CORGI_PANE"] = "8"
+        self.add_agent()
+        self.assertEqual(self.picker(b"2\n")[0], 0)
+        code, output = self.picker(b"\x04")
+        self.assertEqual(code, 1, output)
+        self.assertFalse((self.root / "tui.json").exists())
+
+    def test_picker_drops_default_for_exited_agent(self):
+        os.environ["CORGI_PANE"] = "8"
+        self.add_agent()
+        self.add_agent(pane_id=10)
+        self.assertEqual(self.picker(b"3\n")[0], 0)
+        self.state["panes"][-1]["exited"] = True
+        self.save_snapshot()
+        code, output = self.picker(b"\n")
+        self.assertEqual(code, 1, output)
+        self.assertNotIn("Enter for", output)
+
+    def test_workspaces_sharing_a_folder_keep_separate_defaults(self):
+        os.environ["CORGI_PANE"] = "8"
+        self.add_agent()
+        self.state["workspaces"].append({"id": 2, "name": "same folder", "cwd": str(self.root)})
+        self.state["panes"].append(dict(copy.deepcopy(self.state["panes"][1]), id=11, workspace=2))
+        self.add_agent(pane_id=12, workspace=2)
+        self.add_agent(pane_id=13, workspace=2)
+        self.assertEqual(self.picker(b"2\n")[0], 0)
+        os.environ["CORGI_PANE"] = "11"
+        self.assertEqual(self.picker(b"1\n")[0], 0)
+        os.environ["CORGI_PANE"] = "8"
+        self.assertEqual(self.picker(b"\n")[0], 0)
+        self.assertEqual(self.delivered_to(), "9")
+
+    def test_picker_default_is_scoped_to_runtime(self):
+        # Pane IDs restart in each Corgi runtime, so another socket must not reuse the choice.
+        os.environ["CORGI_PANE"] = "8"
+        self.add_agent()
+        self.assertEqual(self.picker(b"2\n")[0], 0)
+        os.environ["CORGI_SOCKET"] = str(self.root / "other.sock")
+        code, output = self.picker(b"\n")
+        self.assertEqual(code, 1, output)
+        self.assertNotIn("Enter for", output)
 
     def test_busy_blocked_and_unknown_agents_refused(self):
         for state, attention in (("working", "none"), ("blocked", "none"), ("idle", "needs_input"),
