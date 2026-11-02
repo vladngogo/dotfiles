@@ -372,6 +372,60 @@ if os.environ.get('TUI_SEND'):
         self.assertIn("quote", copied.call_args.args[0])
         self.assertEqual(len(notes.rows(True)), 1)
 
+    def test_copy_does_not_wait_for_forked_clipboard_owner(self):
+        # xclip and wl-copy fork a child that keeps serving the selection.
+        bin_dir = self.root / "bin"
+        bin_dir.mkdir()
+        copied, owner = self.root / "copied.txt", self.root / "owner.pid"
+        fake = bin_dir / "xclip"
+        fake.write_text(f"#!{sys.executable}\n" + f'''
+import os, pathlib, sys, time
+pathlib.Path({str(copied)!r}).write_text(sys.stdin.read())
+if os.fork() == 0:
+    pathlib.Path({str(owner)!r}).write_text(str(os.getpid()))
+    time.sleep(30)
+''')
+        fake.chmod(0o755)
+        def stop_owner():
+            if owner.exists():
+                try:
+                    os.kill(int(owner.read_text()), 9)
+                except (OSError, ValueError):
+                    pass
+        self.addCleanup(stop_owner)
+        os.environ["PATH"] = str(bin_dir)
+        started = time.monotonic()
+        with patch.object(annotate.sys, "platform", "linux"):
+            annotate.clipboard("notes")
+        self.assertLess(time.monotonic() - started, 3)
+        self.assertEqual(copied.read_text(), "notes")
+
+    def test_unexpected_snapshot_is_reported_without_traceback(self):
+        del self.state["workspaces"]
+        self.save_snapshot()
+        result = self.cli("export", success=False)
+        self.assertIn("corgi-annotate: Unsupported Corgi snapshot", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
+    def test_missing_workspace_is_reported_without_traceback(self):
+        self.state["workspaces"] = []
+        self.save_snapshot()
+        result = self.cli("export", success=False)
+        self.assertIn("corgi-annotate: Workspace 1", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
+    def test_launch_removes_stale_jobs_only(self):
+        jobs = self.root / "state/corgi-annotate/jobs"
+        jobs.mkdir(parents=True)
+        stale, recent = jobs / "stale.json", jobs / "recent.json"
+        for job in (stale, recent):
+            job.write_text("{}")
+        old = time.time() - 2 * 86400
+        os.utime(stale, (old, old))
+        self.cli("open", str(self.root))
+        self.assertFalse(stale.exists())
+        self.assertTrue(recent.exists())
+
     def test_concurrent_captures_keep_every_note(self):
         processes = [subprocess.Popen([sys.executable, str(SCRIPT), "capture", "--text", str(i), "--comment", "note"],
                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=dict(os.environ)) for i in range(6)]

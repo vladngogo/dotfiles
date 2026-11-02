@@ -24,6 +24,7 @@ TUI_RELEASES = {
     ("Darwin", "arm64"): ("aarch64-apple-darwin", "7e1df874dd905fb85c82e9db4750d1ab64009d4380173ea67bbcb0e4bc9d525b"),
     ("Darwin", "x86_64"): ("x86_64-apple-darwin", "68b0f974bf14d211a3e2a8e001ff3cf47dcad3bbb90eed0c9b419473ad4eabaa"),
 }
+JOB_MAX_AGE = 86400
 SELF = Path(__file__).resolve()
 REVIEW_ENV = ("CORGI_SOCKET", "CORGI_ANNOTATE_CORGI", "CORGI_ANNOTATE_TUI", "XDG_STATE_HOME",
               "XDG_DATA_HOME", "XDG_CONFIG_HOME", "EDITOR", "VISUAL", "PLANNOTATOR_DATA_DIR",
@@ -38,14 +39,16 @@ class Error(Exception):
         self.code = code
 
 
-def run(argv, *, text=None, env=None, cwd=None, timeout=20):
+def run(argv, *, text=None, env=None, cwd=None, timeout=20, capture=True):
+    # capture=False for commands that fork a child holding stdout open (xclip, wl-copy).
+    output = subprocess.PIPE if capture else subprocess.DEVNULL
     try:
-        result = subprocess.run(argv, input=text, text=True, capture_output=True,
+        result = subprocess.run(argv, input=text, text=True, stdout=output, stderr=output,
                                 env=env, cwd=cwd, timeout=timeout)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise Error(f"{argv[0]}: {exc}") from exc
     if result.returncode:
-        raise Error(result.stderr.strip() or result.stdout.strip() or
+        raise Error((result.stderr or "").strip() or (result.stdout or "").strip() or
                     f"{argv[0]} exited {result.returncode}")
     return result.stdout
 
@@ -64,8 +67,9 @@ def corgi(*args, text=None):
 def snapshot():
     reply = corgi("list")
     state = reply.get("result", {})
-    if not isinstance(state.get("panes"), list) or not state.get("server_pid"):
-        raise Error("Unsupported Corgi snapshot; expected panes and server_pid")
+    if (not isinstance(state.get("panes"), list) or not isinstance(state.get("workspaces"), list)
+            or not state.get("server_pid")):
+        raise Error("Unsupported Corgi snapshot; expected panes, workspaces and server_pid")
     return state, reply.get("viewers", [])
 
 
@@ -152,7 +156,9 @@ def context(args):
     if args.pane is None and not args.to and args.command in (
             "open", "terminal", "manage", "paste-archive", "send-archive"):
         target = workspace_agent(state, source, "--to")
-    workspace = next(w for w in state["workspaces"] if w["id"] == source["workspace"])
+    workspace = next((w for w in state["workspaces"] if w["id"] == source.get("workspace")), None)
+    if workspace is None:
+        raise Error(f"Workspace {source.get('workspace')} of pane {source['id']} is not in the Corgi snapshot")
     cwd = source.get("cwd") or workspace["cwd"]
     # Folder + socket scopes survive pane changes while keeping runtimes separate.
     socket = os.environ.get("CORGI_SOCKET") or f"/tmp/corgi-{os.getuid()}/control.sock"
@@ -226,7 +232,7 @@ def clipboard(text=None):
     for command in commands:
         if shutil.which(command[0]):
             try:
-                return run(command, text=text, timeout=5)
+                return run(command, text=text, timeout=5, capture=text is None)
             except Error:
                 pass
     if text is not None and sys.stdout.isatty():
@@ -392,6 +398,13 @@ def review(ctx, args):
 def launch(ctx, args):
     jobs = state_dir() / "jobs"
     jobs.mkdir(exist_ok=True, mode=0o700)
+    # Unconsumed jobs (lost split replies) hold quotes and environment; drop them after a day.
+    for old in jobs.glob("*.json"):
+        try:
+            if old.stat().st_mtime < time.time() - JOB_MAX_AGE:
+                old.unlink()
+        except OSError:
+            pass
     path = jobs / (uuid.uuid4().hex + ".json")
     path.write_text(json.dumps({"context": ctx, "args": args,
                                 "env": {k: os.environ[k] for k in REVIEW_ENV if k in os.environ}}))
