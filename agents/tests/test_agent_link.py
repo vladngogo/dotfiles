@@ -1,5 +1,6 @@
 """Tests for agents/bin/agent-link."""
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -41,6 +42,18 @@ class AgentLinkTest(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("--init", r.stderr)
         self.assertFalse(self.link.exists())
+
+    def test_installed_symlink_resolves_checkout_without_gnu_readlink(self):
+        script = self.dotfiles / "agents/bin/agent-link"
+        script.parent.mkdir()
+        shutil.copy2(SCRIPT, script)
+        launcher = Path(self.tmp.name) / "agent-link"
+        launcher.symlink_to(script)
+        env = {k: v for k, v in os.environ.items() if k != "DOTFILES"}
+        result = subprocess.run([str(launcher), "--init"], cwd=self.repo, env=env,
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(self.notes.exists())
 
     def test_init_links_and_excludes_idempotently(self):
         self.assertEqual(self.run_link("--init").returncode, 0)

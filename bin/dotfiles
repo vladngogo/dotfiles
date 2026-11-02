@@ -1,0 +1,8 @@
+#!/usr/bin/env python3
+"""Run setup from any directory through the installed symlink."""
+import os
+from pathlib import Path
+import sys
+
+root = Path(__file__).resolve().parents[1]
+os.execvp("bash", ["bash", str(root / "setup.sh"), *sys.argv[1:]])

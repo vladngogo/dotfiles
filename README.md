@@ -1,7 +1,123 @@
 # dotfiles
 
-Neovim and [Corgi](https://corgi.computer/) setup for Linux and macOS. Tokyonight in Neovim;
-Corgi's native theme and shortcuts with a Ctrl-a prefix for terminals and agents.
+One work environment for **Apple Silicon macOS** and **Ubuntu/Pop!_OS Linux**
+(x86_64 or aarch64). Tokyonight in Neovim; [Corgi](https://corgi.computer/)'s
+native theme and shortcuts with a Ctrl-a prefix for terminals and agents.
+Tools and keybindings travel with this repo. Accounts and connections stay on
+each machine.
+
+## Install and update
+
+### One-time host prerequisites
+
+**Mac:** use a native terminal (`uname -m` must print `arm64`, not Rosetta).
+Install Apple's compiler tools if missing, and finish the installer dialog:
+
+```bash
+xcode-select --install
+```
+
+**Ubuntu / Pop!_OS:** run this block on the Linux host:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y build-essential procps curl file git unzip fontconfig wl-clipboard xclip
+```
+
+**Both:** if Homebrew is missing, install it using its official installer in your
+own terminal (it may request administrator access):
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+Use Homebrew's standard prefix: `/opt/homebrew` on Apple Silicon or
+`/home/linuxbrew/.linuxbrew` on Linux. Setup discovers it even before it is on
+PATH. It never executes sudo; missing system prerequisites produce a block of
+commands for you to run yourself.
+
+### Set up the environment
+
+```bash
+git clone https://github.com/vladngogo/dotfiles.git ~/github/dotfiles
+cd ~/github/dotfiles
+./setup.sh plan           # read-only: show platform and what will be installed
+./setup.sh                # packages, CLIs, configs, shell, plugins and parsers
+```
+
+Open a new terminal, select **JetBrainsMono Nerd Font** in its settings, then:
+
+```bash
+dotfiles doctor          # check binaries and minimum versions; no credential reads
+dotfiles connections     # local sign-in/key-storage instructions
+corgi                    # start a workspace in your project directory
+```
+
+The installer adds a small managed block to Bash and Zsh startup files (including
+`ZDOTDIR` when set), preserving their other content and keeping backups. It sets
+`EDITOR`/`VISUAL` to `nvim` and puts the shared toolchain on PATH. Your login shell
+and terminal application remain your choice. Configure your terminal's Option/Alt
+key to send Alt if you use Alt bindings on macOS.
+
+### Updates
+
+```bash
+dotfiles update
+```
+
+This requires a clean checkout with an upstream branch, pulls with `--ff-only`,
+installs missing tools and upgrades the Brewfile's packages and managed agent CLIs, runs
+`corgi update`, reapplies configuration, restores Neovim's committed plugin
+lockfile, and checks parser loading. It stops on errors; fix the reported problem
+and rerun. Regular `./setup.sh` performs the same install/update reconciliation
+without pulling Git, so it also works while you are editing this checkout.
+Successful setup cleans obsolete versions/downloads for the Brewfile's packages.
+Temporary npm/download staging is removed even on failure. Existing credentials,
+configuration backups, unrelated packages and the user's npm cache are preserved.
+Homebrew/agent packages track current releases; this is not a version-locked OS
+image. Minimum versions are checked before configuration changes. Managed npm
+CLIs take precedence over older installations on PATH; independently installed
+copies are not deleted because they may belong to other package managers.
+
+Keep this checkout in place: configuration symlinks point into it. Existing files
+and foreign symlinks are backed up before replacement. Claude settings are merged,
+OpenCode's local preferences are preserved, and Corgi preferences are seeded only
+when absent. `./install.sh` remains available as the lower-level config installer
+for machines where you provision dependencies yourself.
+
+### What setup provides
+
+| Component | Shared setup |
+| --- | --- |
+| Editor | Neovim, tree-sitter CLI, locked plugins, eight compiled parsers, Go LSP (`gopls`) |
+| Tools | Git, GitHub CLI, curl, jq, ripgrep, ShellCheck |
+| Runtimes | Python 3.13, Node.js/npm, Go |
+| Agents | Claude Code and Codex in `~/.local/share/dotfiles/npm`; OpenCode V2 through Homebrew |
+| Workspace | Corgi, `corgi-annotate` and its checksum-pinned Plannotator backend |
+| Helpers | `dotfiles`, `keystash`, `agent-eval`, `agent-link` |
+| Configuration | Shared agent instructions/skills/hooks, Neovim keybindings, Bash/Zsh environment |
+| Font / clipboard | JetBrainsMono Nerd Font; macOS `pbcopy`/`pbpaste`, Linux Wayland and X11 tools |
+
+The same flow everywhere: `corgi` in a project, `nvim` to edit, **Ctrl-a** for
+Corgi commands, **Space e** for the file tree, **Space ff/fg** for finding files/text,
+**Ctrl-h/j/k/l** for editor panes, **Space A** for document review, and visual
+**Space a** for annotation capture. Finish Corgi onboarding with the seeded preset.
+Existing machines retain their chosen Corgi preferences; use `corgi onboard` to
+select Corgi / Ctrl-a / Corgi theme if needed.
+
+### Connections are intentionally local
+
+Run `dotfiles connections` for the exact steps. Use the appropriate work or
+personal account through `gh auth login`, Claude's startup sign-in, `codex login`,
+or OpenCode's `/connect`. Set Git author identity locally yourself. Setup never
+signs in, copies authentication files, exports provider keys or selects a provider.
+
+For API keys, use `keystash save <service>` on **each machine**. Pass
+`keystash path <service>` to tools supporting key files, or export the provider's
+documented environment variable only in that terminal. Custom provider URLs,
+models and MCP connections belong in the application's local configuration.
+Do not store them in this checkout or `shell/env.sh`. Existing local connections
+survive setup and updates. See [Secrets and keys](#secrets-and-keys).
 
 ## Requirements
 
@@ -29,23 +145,14 @@ Corgi's native theme and shortcuts with a Ctrl-a prefix for terminals and agents
   binaries. `install.sh` installs Corgi when it is missing using its
   [official installer](https://corgi.computer/install.sh), pinned to a release and
   SHA-256 checksum before execution. This requires `curl` and `sha256sum` or `shasum`.
-- **Python 3.11+** for the installer helpers and `corgi-annotate`.
+- **Python 3.11+** for the installer helpers, keystash's terminal input and `corgi-annotate`.
 
 `install.sh` warns if the tree-sitter CLI is missing, too old, or built for the wrong
 architecture, but does not install it for you.
 
-## Setup
-
-```bash
-git clone git@github.com:vladngogo/dotfiles.git ~/github/dotfiles
-cd ~/github/dotfiles
-./install.sh
-```
-
-The install script installs Corgi if needed, seeds its preferences, and symlinks
-the Neovim and agent configs, backing up existing regular files first.
-On first launch nvim installs its plugins and treesitter parsers automatically —
-give it a minute before expecting highlighting to work.
+`setup.sh` supplies these requirements and installs plugins/parsers before
+finishing. With the config-only `install.sh`, Neovim downloads them on first
+launch; give it a minute before expecting highlighting to work.
 
 ### Corgi setup and migration
 
@@ -204,10 +311,16 @@ and a sandbox are the real boundaries.
 ### Checks
 
 ```bash
-shellcheck install.sh
+shellcheck install.sh setup.sh shell/env.sh tests/smoke_nvim.sh
 python3 -m unittest discover -s tests -v
 python3 -m unittest discover -s agents/tests -v
+bash tests/smoke_nvim.sh  # networked; needs the editor toolchain on PATH
 ```
+
+CI runs the tests and editor smoke check on Ubuntu and Apple Silicon macOS.
+The smoke check uses a disposable home, installs the locked plugins, checks
+repeatable parser setup, repairs a broken existing parser, and verifies that a
+failed plugin fetch fails setup rather than reporting success.
 
 ---
 

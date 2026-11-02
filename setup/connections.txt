@@ -1,0 +1,25 @@
+Connections are local to this machine. Setup/update never copies credentials,
+provider URLs, account choices, MCP connections or Git identity from the repo.
+
+Choose only the services you use, using your work account on the work machine:
+
+  gh auth login             GitHub (interactive browser sign-in)
+  claude                    Claude Code (follow the sign-in prompts)
+  codex login               Codex (interactive sign-in)
+  opencode                  then /connect to select a provider and sign in
+
+For a service that needs an API key:
+
+  keystash save service     paste the key, then Ctrl-D; input is hidden
+  keystash list             lists names, never values
+  keystash path service     returns the key file path
+
+Pass the file path to tools that support key files. For tools expecting an
+environment variable, export it only in the terminal where you will run them:
+
+  export SERVICE_API_KEY="$(cat "$(keystash path service)")"
+
+Replace SERVICE_API_KEY with the variable documented by that provider/tool.
+Custom endpoints and provider configuration belong in the tool's local config,
+not this repository. Do not export provider keys globally in shell/env.sh.
+Git author identity is also local; set it yourself with git config --global.

@@ -1,2 +1,8 @@
 *.bak
+*.bak.*
+.env
+.env.*
+.secrets/
+*.local.json
+*.local.toml
 __pycache__/

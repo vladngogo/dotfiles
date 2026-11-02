@@ -105,17 +105,24 @@ cmd_save() {
             status "$amber" "The existing secret will be replaced when you save."
         fi
         echo "Paste the secret (input is hidden). Ctrl-D saves; Ctrl-C cancels." >&2
-        local secret="" rest=""
-        # Confirm the first character immediately, before waiting for Ctrl-D.
-        IFS= read -r -n 1 -d $'\004' secret || true
-        if [ -n "$secret" ]; then
-            status "$green" "****** Input received; press Ctrl-D to save."
-            IFS= read -r -d $'\004' rest || true
-            secret+="$rest"
-        fi
-        # printf is a builtin, so the secret never appears in another process's argv.
-        printf '%s' "$secret" > "$tmp"
-        unset secret rest
+        # Bash 3.2's read -n changes tty modes, breaking long pastes on macOS.
+        # Read bytes without changing those modes; only the fixed mask is echoed.
+        python3 -c '
+import sys
+seen = False
+try:
+    while True:
+        char = sys.stdin.buffer.read(1)
+        if char in (b"", b"\x04"):
+            break
+        if not seen:
+            sys.stderr.write(sys.argv[1] + "****** Input received; press Ctrl-D to save." + sys.argv[2] + "\n")
+            sys.stderr.flush()
+            seen = True
+        sys.stdout.buffer.write(char)
+except KeyboardInterrupt:
+    sys.exit(130)
+' "$green" "$reset" > "$tmp"
         stty "$stty_saved"
         stty_saved=""
         echo >&2
