@@ -78,7 +78,7 @@ The installer also links `corgi-annotate`, a Herdr Annotate-style replacement us
 Plannotator TUI. Run `corgi-annotate setup` to install its checksum-pinned backend.
 
 ```bash
-corgi-annotate open plan.md          # review a document in a new split
+corgi-annotate plan.md               # review a document in a new split (same as open plan.md)
 corgi-annotate last-newest           # annotate the latest assistant reply
 corgi-annotate terminal              # annotate this pane's terminal output
 ```
@@ -86,8 +86,9 @@ corgi-annotate terminal              # annotate this pane's terminal output
 Run from a Corgi shell: the workspace's sole agent is selected automatically;
 multiple agents get a named picker. `--pane` and `--to` provide explicit overrides.
 
-Use `c` to comment, Enter to save, and `E` to send feedback. In Neovim, visual-mode
-**Space a** captures selected text as a persistent note. See the
+Use `c` to comment, Enter to save, and `E` to send feedback. In Neovim, **Space A**
+reviews the current file and visual-mode **Space a** captures selected text as a
+persistent note. See the
 [annotation guide](corgi/ANNOTATE.md) for capture management, targeting, SSH,
 clipboard support, and migration details.
 
@@ -242,6 +243,7 @@ Leader key is **Space**.
 | `Space ca` | Code action |
 | `Space f` | Format file |
 | `Space a` (visual mode) | Capture selection as a Corgi annotation |
+| `Space A` | Review the current file in a Corgi split |
 
 ### Git
 

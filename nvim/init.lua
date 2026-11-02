@@ -285,17 +285,14 @@ map("n", "<Esc>", "<cmd>nohlsearch<CR>", "Clear highlight")
 -- Insert mode escape
 map("i", "jk", "<Esc>", "Exit insert mode")
 
--- Pass the selection directly so annotations also work over headless SSH.
-vim.keymap.set("x", "<leader>a", function()
+local function corgi_annotate(args)
   if not vim.env.CORGI_PANE or vim.fn.executable("corgi-annotate") == 0 then
     vim.notify("Run Neovim inside Corgi and install corgi-annotate first", vim.log.levels.ERROR)
     return
   end
-  local previous = vim.fn.getreginfo("z")
-  vim.cmd('normal! "zy')
-  local text = vim.fn.getreg("z")
-  vim.fn.setreg("z", previous)
-  vim.fn.jobstart({ "corgi-annotate", "capture", "--pane", "current", "--text=" .. text }, {
+  -- detach: no controlling terminal, so an agent picker can never draw over Neovim.
+  vim.fn.jobstart(vim.list_extend({ "corgi-annotate" }, args), {
+    detach = true,
     on_stderr = function(_, lines)
       local message = table.concat(lines, "\n"):gsub("%s+$", "")
       if message ~= "" then
@@ -303,4 +300,25 @@ vim.keymap.set("x", "<leader>a", function()
       end
     end,
   })
+end
+
+-- Pass the selection directly so annotations also work over headless SSH.
+vim.keymap.set("x", "<leader>a", function()
+  local previous = vim.fn.getreginfo("z")
+  vim.cmd('normal! "zy')
+  local text = vim.fn.getreg("z")
+  vim.fn.setreg("z", previous)
+  corgi_annotate({ "capture", "--pane", "current", "--text=" .. text })
 end, { desc = "Annotate selection in Corgi", silent = true })
+
+-- No --pane: feedback goes to the workspace agent, not to this shell pane's clipboard.
+vim.keymap.set("n", "<leader>A", function()
+  local file = vim.api.nvim_buf_get_name(0)
+  if vim.bo.buftype ~= "" or file == "" then
+    vim.notify("Review needs a file buffer", vim.log.levels.ERROR)
+  elseif vim.bo.modified then
+    vim.notify("Save the buffer first; the review reads the file on disk", vim.log.levels.ERROR)
+  else
+    corgi_annotate({ "open", vim.fn.fnamemodify(file, ":p") })
+  end
+end, { desc = "Review this file in Corgi", silent = true })

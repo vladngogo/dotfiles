@@ -307,6 +307,37 @@ if os.environ.get('TUI_SEND'):
         self.assertEqual(call["env"]["HERDR_BIN_PATH"], str(SCRIPT))
         self.assertEqual(self.calls(["pane", "send"])[0]["text"], "review feedback")
 
+    def test_bare_path_opens_document(self):
+        (self.root / "plan.md").write_text("a plan\n")
+        for argv in (["plan.md", "--here"], ["--here", "--pane", "7", "plan.md"], ["--to=7", "--here", "plan.md"],
+                     ["--pa", "7", "--here", "plan.md"]):
+            (self.root / "tui.json").unlink(missing_ok=True)
+            result = subprocess.run([sys.executable, str(SCRIPT), *argv], cwd=self.root,
+                                    capture_output=True, text=True, env=dict(os.environ), timeout=20)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            call = json.loads((self.root / "tui.json").read_text())
+            self.assertEqual(call["args"], [str(self.root / "plan.md")])
+
+    def test_bare_path_with_command_prefix_is_not_stripped(self):
+        (self.root / "annotate.notes.md").write_text("notes\n")
+        (self.root / "notes.md").write_text("wrong file\n")
+        result = subprocess.run([sys.executable, str(SCRIPT), "annotate.notes.md", "--here"], cwd=self.root,
+                                capture_output=True, text=True, env=dict(os.environ), timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        call = json.loads((self.root / "tui.json").read_text())
+        self.assertEqual(call["args"], [str(self.root / "annotate.notes.md")])
+        self.cli("annotate.capture", "--text", "legacy", "--comment", "note")
+        self.assertIn("legacy", self.cli("export").stdout)
+
+    def test_mistyped_command_still_lists_choices(self):
+        result = self.cli("termnal", success=False)
+        self.assertIn("invalid choice: 'termnal'", result.stderr)
+        result = self.cli("missing.md", success=False)
+        self.assertIn("No such file or folder", result.stderr)
+        (self.root / "sel.md").write_text("selected\n")
+        self.cli("--fi", str(self.root / "sel.md"), "capture", "--comment", "note")
+        self.assertIn("selected", self.cli("export").stdout)
+
     def test_last_uses_exact_transcript_and_opencode_session_id(self):
         self.cli("last-newest", "--here")
         call = json.loads((self.root / "tui.json").read_text())
