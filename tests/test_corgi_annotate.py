@@ -309,7 +309,8 @@ if os.environ.get('TUI_SEND'):
 
     def test_bare_path_opens_document(self):
         (self.root / "plan.md").write_text("a plan\n")
-        for argv in (["plan.md", "--here"], ["--here", "--pane", "7", "plan.md"], ["--to=7", "--here", "plan.md"]):
+        for argv in (["plan.md", "--here"], ["--here", "--pane", "7", "plan.md"], ["--to=7", "--here", "plan.md"],
+                     ["--pa", "7", "--here", "plan.md"]):
             (self.root / "tui.json").unlink(missing_ok=True)
             result = subprocess.run([sys.executable, str(SCRIPT), *argv], cwd=self.root,
                                     capture_output=True, text=True, env=dict(os.environ), timeout=20)
@@ -322,6 +323,9 @@ if os.environ.get('TUI_SEND'):
         self.assertIn("invalid choice: 'termnal'", result.stderr)
         result = self.cli("missing.md", success=False)
         self.assertIn("No such file or folder", result.stderr)
+        (self.root / "sel.md").write_text("selected\n")
+        self.cli("--fi", str(self.root / "sel.md"), "capture", "--comment", "note")
+        self.assertIn("selected", self.cli("export").stdout)
 
     def test_last_uses_exact_transcript_and_opencode_session_id(self):
         self.cli("last-newest", "--here")
