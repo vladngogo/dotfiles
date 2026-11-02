@@ -7,7 +7,7 @@ for visual reviews and a local SQLite store for captured terminal notes.
 
 ## Install
 
-Requirements: Corgi, Python 3.9+, and `curl` for the first backend download.
+Requirements: Corgi, Python 3.11+, and `curl` for the first backend download.
 
 ```bash
 ./install.sh
