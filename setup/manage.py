@@ -78,7 +78,15 @@ def shell_setup(home):
         if text != updated:
             path.parent.mkdir(parents=True, exist_ok=True)
             if path.exists():
-                shutil.copy2(path, path.with_name(f"{path.name}.bak.{uuid.uuid4().hex}"))
+                # copy2 creates its destination with the umask before copying modes.
+                fd, backup = tempfile.mkstemp(prefix=f"{path.name}.bak.", dir=path.parent)
+                try:
+                    with os.fdopen(fd, "wb") as target, path.open("rb") as source:
+                        shutil.copyfileobj(source, target)
+                    shutil.copystat(path, backup)
+                except BaseException:
+                    Path(backup).unlink(missing_ok=True)
+                    raise
             path.write_text(updated)
 
 
