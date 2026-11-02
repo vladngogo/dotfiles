@@ -65,7 +65,7 @@ if [ ! -f "$notes" ]; then
 # Personal notes: $name
 
 Only for me, only in this repo. Team-relevant facts belong in the repo's
-AGENTS.md; preferences for every repo belong in agents/AGENTS.md.
+AGENTS.md; machine-wide preferences belong in your tool's local instruction file.
 EOF
     echo "Created $notes (commit it in dotfiles)"
 fi

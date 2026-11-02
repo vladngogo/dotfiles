@@ -88,7 +88,9 @@ def install(root, config):
         target.symlink_to(source)
         print(f"Linked {target} → {source}")
 
-    link(root / "agents/AGENTS.md", config / "AGENTS.md")
+    instructions = config / "AGENTS.md"
+    if instructions.is_symlink() and os.readlink(instructions) == str(root / "agents/AGENTS.md"):
+        retire(instructions)
     for source in sorted((root / "agents/skills").iterdir()):
         if (source / "SKILL.md").is_file():
             link(source, skills / source.name)
