@@ -4,8 +4,8 @@ Applies in every repo. A repo's own `AGENTS.md` overrides anything here.
 
 ## Environment
 
-- Linux (Pop!_OS, apt-based). Other machines vary, so check `uname` before
-  assuming paths or package managers.
+- Supported hosts: Ubuntu/Pop!_OS Linux and Apple Silicon macOS. Check `uname`
+  and installed tools before choosing paths, package managers or OS commands.
 - Primary languages: Python and SQL.
 
 ## How I work

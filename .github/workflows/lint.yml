@@ -15,7 +15,11 @@ jobs:
           scandir: .
 
   installer:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,7 +29,11 @@ jobs:
         run: python -m unittest discover -s tests -v
 
   agent-eval:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -33,3 +41,18 @@ jobs:
           python-version: "3.11"
       - name: Test agent-eval
         run: python -m unittest discover -s agents/tests -v
+
+  editor-smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Homebrew/actions/setup-homebrew@master
+      - name: Install native editor toolchain
+        run: brew install neovim tree-sitter-cli gopls
+      - name: Verify fresh and repeated parser setup
+        run: bash tests/smoke_nvim.sh

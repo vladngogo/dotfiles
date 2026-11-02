@@ -108,7 +108,7 @@ require("lazy").setup({
       require("mason").setup()
       -- Auto-install gopls if missing
       local mr = require("mason-registry")
-      if not mr.is_installed("gopls") then
+      if vim.fn.executable("gopls") == 0 and not mr.is_installed("gopls") then
         vim.cmd("MasonInstall gopls")
       end
     end,
@@ -211,7 +211,7 @@ require("lazy").setup({
       local to_install = vim.tbl_filter(function(lang)
         return not vim.tbl_contains(installed, lang)
       end, wanted)
-      if #to_install > 0 then
+      if #to_install > 0 and not vim.env.DOTFILES_SETUP then
         ts.install(to_install)
       end
 

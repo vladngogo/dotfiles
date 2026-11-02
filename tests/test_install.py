@@ -221,6 +221,7 @@ exit "${FAKE_CURL_FAIL:-0}"
         shared_deny = repo["permissions"]["deny"][0]
         settings.write_text(json.dumps({
             "theme": "auto",
+            "env": {"LOCAL_PROVIDER_TOKEN": "keep-on-this-machine"},
             "permissions": {"deny": [shared_deny, "Read(~/local-only)"]},
             "hooks": {"PreToolUse": [corgi], "Stop": [corgi]},
         }))
@@ -228,6 +229,7 @@ exit "${FAKE_CURL_FAIL:-0}"
         self.run_install()
         merged = json.loads(settings.read_text())
         self.assertEqual(merged["theme"], "auto")
+        self.assertEqual(merged["env"], {"LOCAL_PROVIDER_TOKEN": "keep-on-this-machine"})
         self.assertEqual(merged["hooks"]["Stop"], [corgi])
         self.assertEqual(merged["hooks"]["PreToolUse"],
                          [corgi] + repo["hooks"]["PreToolUse"])
@@ -290,6 +292,27 @@ exit "${FAKE_CURL_FAIL:-0}"
         self.run_install()
         self.assertFalse((self.home / "curl.log").exists())
         self.assertTrue(self.viewer.exists())
+
+    def test_foreign_config_links_are_backed_up_and_reinstall_is_idempotent(self):
+        target = self.home / ".config/nvim/init.lua"
+        target.parent.mkdir(parents=True)
+        original = self.home / "my-nvim.lua"
+        original.write_text("-- personal config\n")
+        target.symlink_to(original)
+        self.run_install()
+        backups = list(target.parent.glob("init.lua.bak.*"))
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(backups[0].resolve(), original)
+        self.assertEqual(original.read_text(), "-- personal config\n")
+        self.run_install()
+        self.assertEqual(list(target.parent.glob("init.lua.bak.*")), backups)
+
+    def test_nvim_respects_xdg_and_app_name(self):
+        config = self.home / "my configs"
+        self.env.update(XDG_CONFIG_HOME=str(config), NVIM_APPNAME="work-nvim")
+        self.run_install()
+        self.assertEqual((config / "work-nvim/init.lua").resolve(), ROOT / "nvim/init.lua")
+        self.assertFalse((self.home / ".config/nvim").exists())
 
     def test_existing_local_launcher_off_path_skips_download(self):
         self.executable(self.launcher)

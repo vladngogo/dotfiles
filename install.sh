@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — install Corgi and put dotfiles into place
+# install.sh — config-only installer; setup.sh also provisions dependencies
 set -euo pipefail
 
 DOTFILES="$(cd "$(dirname "$0")" && pwd)"
@@ -7,12 +7,22 @@ DOTFILES="$(cd "$(dirname "$0")" && pwd)"
 # Back up $1 to a timestamped path so repeated runs never clobber an earlier backup.
 backup() {
     local target="$1"
-    if [ -e "$target" ] && [ ! -L "$target" ]; then
+    if [ -e "$target" ] || [ -L "$target" ]; then
         local dest
         dest="${target}.bak.$(date +%Y%m%d%H%M%S)"
+        while [ -e "$dest" ] || [ -L "$dest" ]; do dest="${dest}.1"; done
         echo "Backing up existing $target → $dest"
         mv "$target" "$dest"
     fi
+}
+
+link() {
+    local src="$1" target="$2"
+    mkdir -p "$(dirname "$target")"
+    if [ -L "$target" ] && [ "$(readlink "$target")" = "$src" ]; then return; fi
+    backup "$target"
+    ln -s "$src" "$target"
+    echo "Linked $target → $src"
 }
 
 # ── corgi ─────────────────────────────────────────────────────
@@ -68,32 +78,23 @@ if [ -L "$HOME/.tmux.conf" ] && [ "$(readlink "$HOME/.tmux.conf")" = "$DOTFILES/
 fi
 
 # ── nvim ──────────────────────────────────────────────────────
-NVIM_DIR="$HOME/.config/nvim"
+NVIM_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/${NVIM_APPNAME:-nvim}"
 mkdir -p "$NVIM_DIR"
 
 for f in init.lua lazy-lock.json; do
     target="$NVIM_DIR/$f"
-    backup "$target"
-    ln -sf "$DOTFILES/nvim/$f" "$target"
-    echo "Linked $target → $DOTFILES/nvim/$f"
+    link "$DOTFILES/nvim/$f" "$target"
 done
 
 # ── agents (tool-agnostic) ────────────────────────────────────
 # agents/ holds instructions, skills and hooks that any agent can use. Each
 # tool gets per-item links, never a link to its whole config dir: those dirs
 # also hold credentials, history and session state that must stay local.
-link() {
-    local src="$1" target="$2"
-    mkdir -p "$(dirname "$target")"
-    backup "$target"
-    ln -sfn "$src" "$target"
-    echo "Linked $target → $src"
-}
-
 AGENTS_SRC="$DOTFILES/agents"
 
 link "$DOTFILES/corgi/bin/corgi-annotate" "$HOME/.local/bin/corgi-annotate"
 link "$DOTFILES/bin/keystash" "$HOME/.local/bin/keystash"
+link "$DOTFILES/bin/dotfiles" "$HOME/.local/bin/dotfiles"
 
 # Claude Code: CLAUDE.md just imports AGENTS.md so the content stays generic.
 CLAUDE_DIR="$HOME/.claude"
@@ -132,8 +133,13 @@ python3 "$DOTFILES/opencode/install" "$DOTFILES" "${XDG_CONFIG_HOME:-$HOME/.conf
 TS_CLI_MIN="0.26.1"
 
 version_lt() {
-    [ "$1" = "$2" ] && return 1
-    [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -n1)" = "$1" ]
+    python3 - "$1" "$2" <<'PY'
+import re
+import sys
+def version(text):
+    return tuple(int(part) for part in re.match(r"\d+(?:\.\d+)*", text)[0].split("."))
+sys.exit(0 if version(sys.argv[1]) < version(sys.argv[2]) else 1)
+PY
 }
 
 echo ""
