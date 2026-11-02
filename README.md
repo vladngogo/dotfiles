@@ -3,8 +3,8 @@
 One work environment for **Apple Silicon macOS** and **Ubuntu/Pop!_OS Linux**
 (x86_64 or aarch64). Tokyonight in Neovim; [Corgi](https://corgi.computer/)'s
 native theme and shortcuts with a Ctrl-a prefix for terminals and agents.
-Tools and keybindings travel with this repo. Accounts and connections stay on
-each machine.
+Tools and keybindings travel with this repo. Accounts, connections and global
+agent instructions stay on each machine.
 
 ## Install and update
 
@@ -95,7 +95,7 @@ for machines where you provision dependencies yourself.
 | Agents | Claude Code and Codex in `~/.local/share/dotfiles/npm`; OpenCode V2 through Homebrew |
 | Workspace | Corgi, `corgi-annotate` and its checksum-pinned Plannotator backend |
 | Helpers | `dotfiles`, `keystash`, `agent-eval`, `agent-link` |
-| Configuration | Shared agent instructions/skills/hooks, Neovim keybindings, Bash/Zsh environment |
+| Configuration | Shared agent skills/hooks, Neovim keybindings, Bash/Zsh environment |
 | Font / clipboard | JetBrainsMono Nerd Font; macOS `pbcopy`/`pbpaste`, Linux Wayland and X11 tools |
 
 The same flow everywhere: `corgi` in a project, `nvim` to edit, **Ctrl-a** for
@@ -243,8 +243,8 @@ corgi/
   bin/corgi-annotate — document/reply reviews and persistent terminal notes (→ ~/.local/bin)
   ANNOTATE.md       — annotation commands, targeting and migration guide
 tests/              — installer, keystash and annotation tests; opt-in live smoke test
-agents/             — tool-agnostic agent config (the source of truth)
-  AGENTS.md         — global instructions, linked for every agent tool
+agents/             — shared agent skills, hooks and tools
+  AGENTS.md         — legacy reference for archived links; not installed
   skills/<name>/    — SKILL.md skills (build-evals, fold-or-keep)
   hooks/guard-bash  — blocks pushes to main/master, force pushes, and credential-path access
   hooks/lint-edit   — runs shellcheck on shell scripts right after an agent edits them
@@ -253,37 +253,52 @@ agents/             — tool-agnostic agent config (the source of truth)
   repos/<repo>.md   — personal notes for one repo
   tests/            — `python3 -m unittest discover -s agents/tests`
 claude/             — thin Claude Code adapter
-  CLAUDE.md         — imports `~/.claude/AGENTS.md` and, if present, `~/.claude/local.md`
+  CLAUDE.md         — legacy import wrapper for archived links; not installed
   settings.json     — deny reads of secrets, allow read-only system queries, wires the guard and lint hooks
   merge-settings    — merge settings.json into ~/.claude/settings.json (install.sh)
 opencode/           — thin OpenCode V2 adapter
-  install           — link shared instructions/skills and archive stale integrations
+  install           — link shared skills and archive stale integrations
 ```
 
 ### Agents
 
-Write anything generic in `agents/`; per-tool directories stay thin adapters.
-Instructions come in four layers:
+Global instructions are machine-local. Create or edit the files for the tools
+you use; setup does not create, overwrite or link them:
+
+| Tool | Local instruction file |
+|---|---|
+| Claude Code | `~/.claude/CLAUDE.md` |
+| Codex | `~/.codex/AGENTS.md` |
+| OpenCode | `${XDG_CONFIG_HOME:-~/.config}/opencode/AGENTS.md` |
+
+On upgrade, the installer archives only global instruction symlinks pointing to
+this checkout: Claude/Codex links become adjacent `.bak.*` files, and OpenCode's
+link moves under its config directory's `retired/` folder. Existing local files
+and links to other sources are preserved. The legacy source files in this repo
+remain available so archived links stay readable, but are no longer installed.
+If you used `~/.claude/local.md`, import it explicitly from your local
+`~/.claude/CLAUDE.md` or move its rules there; the old automatic wrapper is retired.
+
+Instruction scopes:
 
 | Layer | Where | Committed to the project repo? |
 |---|---|---|
-| Personal, every repo | `agents/AGENTS.md` → `~/.claude/AGENTS.md` (imported by `~/.claude/CLAUDE.md`) | no |
+| Personal, this machine | the tool's local instruction file above | no |
 | Team, one repo | that repo's `AGENTS.md` (+ `CLAUDE.md` containing `@AGENTS.md`) | yes |
 | Personal, one repo | `agents/repos/<repo>.md` → `CLAUDE.local.md` via `agent-link` | no |
-| Personal, one machine | `~/.claude/local.md`, outside this repo (Claude Code only) | no |
 
 Test for where a line goes: would a teammate on a different OS, who's never
 seen your setup, get worse results without it? Then it's the repo's. If it
 would be wrong or irrelevant for them, it's personal. Rules that must never
 break go in CODEOWNERS, branch protection, hooks or CI, not only in prose.
 
-Machine facts (hostnames, hardware, local doc paths) go in `~/.claude/local.md`,
-which never enters the repo. Claude Code skips the import when the file is missing.
+Machine facts (hostnames, hardware, local doc paths) belong in those local files,
+outside this repo.
 
 Run `agent-link --init` in a fresh clone to attach (or create) your notes. It
 hides the link with `.git/info/exclude`, so the team's `.gitignore` is untouched.
 
-`install.sh` links individual items into `~/.claude/`, `~/.codex/`, and
+`install.sh` links individual skills/hooks into `~/.claude/` and
 `${XDG_CONFIG_HOME:-~/.config}/opencode/`, never
 the whole directory, because those also hold credentials and session history.
 `settings.json` is the exception: Claude Code (`/config`) and Corgi rewrite it,
@@ -293,7 +308,7 @@ to `claude/settings.json` and re-run `install.sh`; removing one from the repo
 does not remove it locally, and a repo hook deleted locally comes back on the
 next install (remove it from the repo to opt out).
 
-OpenCode gets `AGENTS.md` and individual shared skill links. Server configuration
+OpenCode gets individual shared skill links. Global instructions, server configuration
 and `cli.json` preferences stay local; no custom agents or plugins are required.
 The installer archives dangling links to this checkout's old OpenCode files and
 Herdr-marked integrations under the OpenCode config directory's `retired/` folder,

@@ -25,6 +25,13 @@ link() {
     echo "Linked $target → $src"
 }
 
+retire_instruction_link() {
+    local src="$1" target="$2"
+    if [ -L "$target" ] && [ "$(readlink "$target")" = "$src" ]; then
+        backup "$target"
+    fi
+}
+
 # ── corgi ─────────────────────────────────────────────────────
 install_corgi() (
     # Pin both the release URL and the script bytes before executing upstream code.
@@ -87,7 +94,7 @@ for f in init.lua lazy-lock.json; do
 done
 
 # ── agents (tool-agnostic) ────────────────────────────────────
-# agents/ holds instructions, skills and hooks that any agent can use. Each
+# agents/ holds shared skills, hooks and tools. Each
 # tool gets per-item links, never a link to its whole config dir: those dirs
 # also hold credentials, history and session state that must stay local.
 AGENTS_SRC="$DOTFILES/agents"
@@ -96,10 +103,11 @@ link "$DOTFILES/corgi/bin/corgi-annotate" "$HOME/.local/bin/corgi-annotate"
 link "$DOTFILES/bin/keystash" "$HOME/.local/bin/keystash"
 link "$DOTFILES/bin/dotfiles" "$HOME/.local/bin/dotfiles"
 
-# Claude Code: CLAUDE.md just imports AGENTS.md so the content stays generic.
+# Global instructions belong to the machine; retire only this installer's links.
 CLAUDE_DIR="$HOME/.claude"
-link "$AGENTS_SRC/AGENTS.md" "$CLAUDE_DIR/AGENTS.md"
-link "$DOTFILES/claude/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
+retire_instruction_link "$AGENTS_SRC/AGENTS.md" "$CLAUDE_DIR/AGENTS.md"
+retire_instruction_link "$DOTFILES/claude/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
+retire_instruction_link "$AGENTS_SRC/AGENTS.md" "$HOME/.codex/AGENTS.md"
 # Claude Code and Corgi rewrite settings.json, so merge the repo's entries into
 # the local file instead of linking it.
 python3 "$DOTFILES/claude/merge-settings" "$DOTFILES/claude/settings.json" "$CLAUDE_DIR/settings.json"
@@ -119,10 +127,7 @@ case ":$PATH:" in
     *) echo "WARNING: ~/.local/bin is not on PATH — add it to run corgi and the agent tools." ;;
 esac
 
-# Codex reads ~/.codex/AGENTS.md directly.
-link "$AGENTS_SRC/AGENTS.md" "$HOME/.codex/AGENTS.md"
-
-# OpenCode V2 reads AGENTS.md directly. Keep preferences and runtime state local.
+# OpenCode V2: shared skills, with instructions, preferences and runtime state local.
 python3 "$DOTFILES/opencode/install" "$DOTFILES" "${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
 
 
