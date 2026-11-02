@@ -94,7 +94,38 @@ def identity(state, pane):
             "provider": agent.get("provider"), "session": agent.get("session", "")}
 
 
-def pick_agent(candidates, option):
+def last_agents_path():
+    return state_dir() / "last-agent.json"
+
+
+def remembered_agent(scope, candidates):
+    try:
+        last = json.loads(last_agents_path().read_text()).get(scope)
+    except (OSError, ValueError, AttributeError):
+        return None
+    # Pane and provider, not session: a new conversation in the same pane keeps the default.
+    return next((p for p in candidates if isinstance(last, dict) and str(p["id"]) == str(last.get("pane"))
+                 and p["agent"]["provider"] == last.get("provider")), None)
+
+
+def remember_agent(scope, pane):
+    path = last_agents_path()
+    try:
+        try:
+            choices = json.loads(path.read_text())
+            if not isinstance(choices, dict):
+                choices = {}
+        except (OSError, ValueError):
+            choices = {}
+        choices[scope] = {"pane": pane["id"], "provider": pane["agent"]["provider"]}
+        temporary = path.with_name(f".{path.name}.{os.getpid()}")
+        temporary.write_text(json.dumps(choices))
+        temporary.replace(path)
+    except OSError:
+        pass  # Losing the default only costs a keypress next time.
+
+
+def pick_agent(candidates, option, scope):
     """Read the controlling terminal, leaving piped input and stdout untouched."""
     try:
         reader = open("/dev/tty", "r")
@@ -106,24 +137,36 @@ def pick_agent(candidates, option):
     except OSError as exc:
         ids = ", ".join(str(p["id"]) for p in candidates)
         raise Error(f"Multiple agents in this workspace ({ids}); run from a shell to choose, or pass {option} ID") from exc
+    default = remembered_agent(scope, candidates)
     with reader, writer:
         print("Choose an agent in this workspace:", file=writer)
         for index, pane in enumerate(candidates, 1):
             agent = pane["agent"]
             name = agent.get("name") or pane.get("title") or agent["provider"]
             name = "".join(c if c.isprintable() else " " for c in str(name))
-            print(f"  {index}. {name} — {agent['provider']} · {agent.get('state', 'unknown')} · pane {pane['id']}", file=writer)
+            last = " (last)" if pane is default else ""
+            print(f"  {index}. {name} — {agent['provider']} · {agent.get('state', 'unknown')} · pane {pane['id']}{last}",
+                  file=writer)
+        hint = f"Enter for {candidates.index(default) + 1}, " if default else ""
         while True:
-            print("Agent number (q to cancel): ", end="", file=writer, flush=True)
-            answer = reader.readline().strip()
-            if not answer or answer.lower() == "q":
+            print(f"Agent number ({hint}q to cancel): ", end="", file=writer, flush=True)
+            line = reader.readline()
+            answer = line.strip()
+            # EOF (empty read) always cancels; only a real Enter accepts the default.
+            if not line or answer.lower() == "q" or (not answer and default is None):
                 raise Error("Agent selection cancelled")
-            if answer.isdecimal() and 1 <= int(answer) <= len(candidates):
-                return candidates[int(answer) - 1]
-            print(f"Choose a number from 1 to {len(candidates)}.", file=writer)
+            if not answer:
+                chosen = default
+            elif answer.isdecimal() and 1 <= int(answer) <= len(candidates):
+                chosen = candidates[int(answer) - 1]
+            else:
+                print(f"Choose a number from 1 to {len(candidates)}.", file=writer)
+                continue
+            remember_agent(scope, chosen)
+            return chosen
 
 
-def workspace_agent(state, source, option):
+def workspace_agent(state, source, option, scope):
     if source.get("agent", {}).get("provider"):
         return source
     candidates = [p for p in state["panes"] if p["workspace"] == source["workspace"]
@@ -132,7 +175,7 @@ def workspace_agent(state, source, option):
         return source
     if len(candidates) == 1:
         return candidates[0]
-    return pick_agent(candidates, option)
+    return pick_agent(candidates, option, scope)
 
 
 def context(args):
@@ -155,21 +198,21 @@ def context(args):
     if not selected:
         raise Error("Select a source with --pane ID or --viewer ID (see corgi list)")
     source = pane_by_id(state, selected)
+    workspace = next((w for w in state["workspaces"] if w["id"] == source.get("workspace")), None)
+    if workspace is None:
+        raise Error(f"Workspace {source.get('workspace')} of pane {source['id']} is not in the Corgi snapshot")
+    # Folder + socket scopes survive pane changes while keeping runtimes separate.
+    socket = os.environ.get("CORGI_SOCKET") or f"/tmp/corgi-{os.getuid()}/control.sock"
+    scope = json.dumps([str(Path(socket).resolve()), workspace["cwd"]])
     if args.pane is None and args.command in ("last", "last-newest"):
-        source = workspace_agent(state, source, "--pane")
+        source = workspace_agent(state, source, "--pane", scope)
     target = pane_by_id(state, args.to) if args.to else source
     if args.to and not target.get("agent", {}).get("provider"):
         raise Error(f"Pane {args.to} has no detected agent", "agent_not_found")
     if args.pane is None and not args.to and args.command in (
             "open", "terminal", "manage", "paste-archive", "send-archive"):
-        target = workspace_agent(state, source, "--to")
-    workspace = next((w for w in state["workspaces"] if w["id"] == source.get("workspace")), None)
-    if workspace is None:
-        raise Error(f"Workspace {source.get('workspace')} of pane {source['id']} is not in the Corgi snapshot")
+        target = workspace_agent(state, source, "--to", scope)
     cwd = source.get("cwd") or workspace["cwd"]
-    # Folder + socket scopes survive pane changes while keeping runtimes separate.
-    socket = os.environ.get("CORGI_SOCKET") or f"/tmp/corgi-{os.getuid()}/control.sock"
-    scope = json.dumps([str(Path(socket).resolve()), workspace["cwd"]])
     return {"source": source, "target": identity(state, target), "cwd": cwd,
             "workspace": workspace["name"], "scope": scope,
             "viewer": viewer["id"] if viewer else None}

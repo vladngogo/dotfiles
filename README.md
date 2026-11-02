@@ -84,7 +84,8 @@ corgi-annotate terminal              # annotate this pane's terminal output
 ```
 
 Run from a Corgi shell: the workspace's sole agent is selected automatically;
-multiple agents get a named picker. `--pane` and `--to` provide explicit overrides.
+multiple agents get a named picker, where Enter repeats your last choice. `--pane`
+and `--to` provide explicit overrides.
 
 Use `c` to comment, Enter to save, and `E` to send feedback. In Neovim, **Space A**
 reviews the current file and visual-mode **Space a** captures selected text as a
