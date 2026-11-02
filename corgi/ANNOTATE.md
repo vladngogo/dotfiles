@@ -162,7 +162,7 @@ If detection is incomplete or the host's transcript format is unsupported, use
 | Item | Location / override |
 |---|---|
 | Captured notes | `${XDG_STATE_HOME:-~/.local/state}/corgi-annotate/annotations.sqlite3` |
-| Pending split launch context | Same directory, `jobs/`; consumed when the review starts |
+| Pending split launch context | Same directory, `jobs/`; consumed when the review starts, removed after a day if unused |
 | Backend binary | `${XDG_DATA_HOME:-~/.local/share}/corgi-annotate/bin/plannotator-tui-v0.9.9` |
 | Document notes/history | Plannotator data directory; override with `PLANNOTATOR_DATA_DIR` |
 | Custom backend executable | `CORGI_ANNOTATE_TUI` |
