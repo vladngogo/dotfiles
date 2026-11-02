@@ -157,7 +157,7 @@ def main(action):
     run("corgi", "update")
     run("corgi-annotate", "setup")
     # Restore the reviewed lockfile rather than silently moving plugin versions.
-    run("env", "DOTFILES_SETUP=1", "nvim", "--headless", "+Lazy! restore", "+qa")
+    run("env", "DOTFILES_SETUP=1", "nvim", "--headless", "-S", ROOT / "setup/plugins.lua")
     run("env", "DOTFILES_SETUP=1", "nvim", "--headless", "-S", ROOT / "setup/parsers.lua")
     result = doctor()
     if result == 0:

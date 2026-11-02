@@ -17,4 +17,5 @@ if not ok then
   vim.cmd("cquit 1")
 end
 print("All eight Treesitter parsers installed and loadable")
-vim.cmd("qa")
+-- A repaired dlopen failure can leave Neovim's error flag set.
+vim.cmd("cquit 0")

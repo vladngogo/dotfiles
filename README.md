@@ -311,10 +311,16 @@ and a sandbox are the real boundaries.
 ### Checks
 
 ```bash
-shellcheck install.sh
+shellcheck install.sh setup.sh shell/env.sh tests/smoke_nvim.sh
 python3 -m unittest discover -s tests -v
 python3 -m unittest discover -s agents/tests -v
+bash tests/smoke_nvim.sh  # networked; needs the editor toolchain on PATH
 ```
+
+CI runs the tests and editor smoke check on Ubuntu and Apple Silicon macOS.
+The smoke check uses a disposable home, installs the locked plugins, checks
+repeatable parser setup, repairs a broken existing parser, and verifies that a
+failed plugin fetch fails setup rather than reporting success.
 
 ---
 
