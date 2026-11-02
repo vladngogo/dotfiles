@@ -62,6 +62,43 @@ class SetupTest(unittest.TestCase):
             manage.shell_setup(self.home)
         self.assertEqual(path.read_text(), manage.BEGIN + "\nlocal content\n")
 
+    def test_private_shell_backup_is_private_before_metadata_is_copied(self):
+        path = self.home / ".bashrc"
+        original = "export EXAMPLE_TOKEN=synthetic-test-value\n"
+        path.write_text(original)
+        path.chmod(0o600)
+        copystat = shutil.copystat
+        observed = []
+
+        def inspect_backup(source, target, **kwargs):
+            backup = Path(target)
+            self.assertEqual(backup.read_text(), original)
+            self.assertEqual(backup.stat().st_mode & 0o777, 0o600)
+            observed.append(backup)
+            return copystat(source, target, **kwargs)
+
+        previous = os.umask(0o022)
+        try:
+            with patch.object(manage.shutil, "copystat", side_effect=inspect_backup):
+                manage.shell_setup(self.home)
+        finally:
+            os.umask(previous)
+        self.assertEqual(observed, list(self.home.glob(".bashrc.bak.*")))
+        self.assertEqual(len(observed), 1)
+        self.assertEqual(observed[0].stat().st_mode & 0o777, 0o600)
+
+    def test_failed_shell_backup_preserves_original_and_removes_partial_copy(self):
+        path = self.home / ".bashrc"
+        original = "export EXAMPLE_TOKEN=synthetic-test-value\n"
+        path.write_text(original)
+        path.chmod(0o600)
+        with patch.object(manage.shutil, "copystat", side_effect=OSError("backup failed")):
+            with self.assertRaisesRegex(OSError, "backup failed"):
+                manage.shell_setup(self.home)
+        self.assertEqual(path.read_text(), original)
+        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        self.assertFalse(list(self.home.glob(".bashrc.bak.*")))
+
     def test_empty_xdg_and_zdotdir_use_home_defaults(self):
         with patch.dict(os.environ, {"XDG_CONFIG_HOME": "", "XDG_DATA_HOME": "", "ZDOTDIR": ""}):
             manage.shell_setup(self.home)
