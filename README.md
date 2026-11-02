@@ -1,10 +1,11 @@
 # dotfiles
 
-Portable Neovim and [Corgi](https://corgi.computer/) setup. Tokyonight in Neovim;
+Neovim and [Corgi](https://corgi.computer/) setup for Linux and macOS. Tokyonight in Neovim;
 Corgi's native theme and shortcuts with a Ctrl-a prefix for terminals and agents.
 
 ## Requirements
 
+- **Git and Bash** — used by the installer and helper scripts.
 - **Neovim 0.12.0+** — `nvim-treesitter` tracks its `main` branch, which requires 0.12
   and does not work on 0.11.
 - **`tree-sitter` CLI >= 0.26.1**, matching your CPU architecture — install via a
@@ -15,6 +16,8 @@ Corgi's native theme and shortcuts with a Ctrl-a prefix for terminals and agents
   cargo install tree-sitter-cli     # Linux (or your distro package)
   ```
 - **A C compiler**, plus `tar` and `curl` on PATH — used to fetch and compile parsers.
+- **`ripgrep` (`rg`)** — required for Telescope's live grep (`Space fg`).
+- **Go** — required to install and run `gopls`, the configured Go language server.
 - **A Nerd Font** in your terminal — `nvim-web-devicons`, `lualine`, and the
   gitsigns delete glyph all render icon codepoints that a regular font doesn't
   have. Without one they show as boxes/tofu instead of icons. Grab one from
@@ -22,11 +25,11 @@ Corgi's native theme and shortcuts with a Ctrl-a prefix for terminals and agents
 - **A clipboard tool**, for Neovim's `unnamedplus` to reach the system
   clipboard — `pbcopy` (macOS, built in), `wl-clipboard` (Wayland), or
   `xclip`/`xsel` (X11). Neovim autodetects whichever is installed.
-- **macOS Apple Silicon, Linux amd64/arm64, or WSL** for Corgi's official
+- **macOS Apple Silicon or Linux amd64/arm64** for Corgi's official
   binaries. `install.sh` installs Corgi when it is missing using its
   [official installer](https://corgi.computer/install.sh), pinned to a release and
   SHA-256 checksum before execution. This requires `curl` and `sha256sum` or `shasum`.
-- **Python 3.11+** for `corgi-annotate`, the terminal/document annotation CLI.
+- **Python 3.11+** for the installer helpers, `keystash`, and `corgi-annotate`.
 
 `install.sh` warns if the tree-sitter CLI is missing, too old, or built for the wrong
 architecture, but does not install it for you.
@@ -121,13 +124,13 @@ Input is stored byte for byte, so pressing Enter before Ctrl-D adds a trailing n
 ```
 bin/keystash        — save secrets and generate RSA keys privately (→ ~/.local/bin)
 nvim/
-  init.lua          — single-file nvim config (lazy.nvim, telescope, gitsigns, lsp, etc.)
+  init.lua          — single-file nvim config (lazy.nvim, telescope, gitsigns, native LSP, etc.)
   lazy-lock.json    — plugin lockfile
 corgi/
   viewer.json       — first-run preferences (Corgi preset/theme, Ctrl-a prefix)
   bin/corgi-annotate — document/reply reviews and persistent terminal notes (→ ~/.local/bin)
   ANNOTATE.md       — annotation commands, targeting and migration guide
-tests/              — installer/annotation regression tests and opt-in live smoke test
+tests/              — installer, keystash and annotation tests; opt-in live smoke test
 agents/             — tool-agnostic agent config (the source of truth)
   AGENTS.md         — global instructions, linked for every agent tool
   skills/<name>/    — SKILL.md skills (build-evals, fold-or-keep)
@@ -148,11 +151,11 @@ opencode/           — thin OpenCode V2 adapter
 ### Agents
 
 Write anything generic in `agents/`; per-tool directories stay thin adapters.
-Instructions come in three layers:
+Instructions come in four layers:
 
-| Layer | Where | Committed to the repo? |
+| Layer | Where | Committed to the project repo? |
 |---|---|---|
-| Personal, every repo | `agents/AGENTS.md` → `~/.claude/CLAUDE.md` | no |
+| Personal, every repo | `agents/AGENTS.md` → `~/.claude/AGENTS.md` (imported by `~/.claude/CLAUDE.md`) | no |
 | Team, one repo | that repo's `AGENTS.md` (+ `CLAUDE.md` containing `@AGENTS.md`) | yes |
 | Personal, one repo | `agents/repos/<repo>.md` → `CLAUDE.local.md` via `agent-link` | no |
 | Personal, one machine | `~/.claude/local.md`, outside this repo (Claude Code only) | no |
@@ -369,6 +372,8 @@ corgi
 - **Tab shortcuts start at 1** with the Corgi preset.
 - **Inline git blame** is always on via gitsigns — see who wrote each line without leaving nvim.
 - **`:Lazy`** opens the plugin manager UI — update plugins with `U`, check status, sync lockfile.
+  Treesitter is pinned to a specific commit in `init.lua`; update that pin deliberately
+  and rebuild parsers with `:TSUpdate` when upgrading it.
 - **`:Mason`** manages LSP servers — currently auto-installs `gopls`. Add more in `init.lua`.
 - **Relative line numbers** make `5j` / `12k` jumps easy — just read the number next to the target line.
 - **`Ctrl-a z`** zooms a Corgi pane and back — great for temporarily focusing on one pane.
@@ -473,22 +478,3 @@ xcape -e 'Control_L=Escape'         # tapping Ctrl fires Escape
 ```bash
 gsettings set org.gnome.desktop.input-sources xkb-options "['caps:escape']"
 ```
-
-### WSL
-
-WSL inherits keyboard input from Windows, so you remap on the Windows side:
-
-1. **PowerToys** (recommended):
-   - Install [Microsoft PowerToys](https://github.com/microsoft/PowerToys)
-   - Open PowerToys → Keyboard Manager → Remap a Key
-   - Map `CapsLock` → `Esc`
-   - Takes effect immediately, persists across reboots.
-
-2. **Registry edit** (no install needed, requires reboot):
-   Open PowerShell as Administrator:
-   ```powershell
-   $hexified = "00,00,00,00,00,00,00,00,02,00,00,00,01,00,3a,00,00,00,00,00".Split(',') | % { "0x$_" }
-   $kMap = 'HKLM:\SYSTEM\CurrentControlSet\Control\Keyboard Layout'
-   New-ItemProperty -Path $kMap -Name "Scancode Map" -PropertyType Binary -Value ([byte[]]$hexified)
-   ```
-   Reboot to apply. To undo, delete the `Scancode Map` value from that registry key and reboot.
