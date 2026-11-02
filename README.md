@@ -26,7 +26,7 @@ Corgi's native theme and shortcuts with a Ctrl-a prefix for terminals and agents
   binaries. `install.sh` installs Corgi when it is missing using its
   [official installer](https://corgi.computer/install.sh), pinned to a release and
   SHA-256 checksum before execution. This requires `curl` and `sha256sum` or `shasum`.
-- **Python 3.9+** for `corgi-annotate`, the terminal/document annotation CLI.
+- **Python 3.11+** for `corgi-annotate`, the terminal/document annotation CLI.
 
 `install.sh` warns if the tree-sitter CLI is missing, too old, or built for the wrong
 architecture, but does not install it for you.
