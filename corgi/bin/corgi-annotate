@@ -33,6 +33,10 @@ REVIEW_ENV = ("CORGI_SOCKET", "CORGI_ANNOTATE_CORGI", "CORGI_ANNOTATE_TUI", "XDG
               "PI_CODING_AGENT_SESSION_DIR", "PI_CODING_AGENT_DIR", "HERMES_HOME", "OPENCODE_DB")
 
 
+COMMANDS = ("setup", "panes", "open", "last", "last-newest", "terminal", "capture", "manage",
+            "export", "copy-context", "copy-archive", "paste-archive", "send-archive", "archive", "restore")
+
+
 class Error(Exception):
     def __init__(self, message, code="annotate_error"):
         super().__init__(message)
@@ -98,7 +102,7 @@ def pick_agent(candidates, option):
             raise
     except OSError as exc:
         ids = ", ".join(str(p["id"]) for p in candidates)
-        raise Error(f"Multiple agents in this workspace ({ids}); use {option} ID without an interactive terminal") from exc
+        raise Error(f"Multiple agents in this workspace ({ids}); run from a shell to choose, or pass {option} ID") from exc
     with reader, writer:
         print("Choose an agent in this workspace:", file=writer)
         for index, pane in enumerate(candidates, 1):
@@ -466,9 +470,7 @@ def main(argv=None):
             return 0
         parser = argparse.ArgumentParser(description=__doc__)
         parser.add_argument("--version", action="version", version=VERSION)
-        parser.add_argument("command", nargs="?", default="open", choices=[
-            "setup", "panes", "open", "last", "last-newest", "terminal", "capture", "manage",
-            "export", "copy-context", "copy-archive", "paste-archive", "send-archive", "archive", "restore"])
+        parser.add_argument("command", nargs="?", default="open", choices=COMMANDS)
         parser.add_argument("path", nargs="?", help="document/folder for open, or annotation ID for archive/restore")
         parser.add_argument("--pane", help="explicit source/recipient pane (or current); bypass automatic agent selection")
         parser.add_argument("--viewer", type=int, help="source viewer ID for terminal/OS key bindings")
@@ -483,6 +485,10 @@ def main(argv=None):
         parser.add_argument("--archived", action="store_true", help="export archived notes")
         if argv and argv[0].startswith("annotate."):
             argv[0] = argv[0].removeprefix("annotate.")
+        # A bare path means open; anything else unknown still gets argparse's list of choices.
+        if argv and argv[0] not in COMMANDS and not argv[0].startswith("-") and (
+                "/" in argv[0] or argv[0].endswith(".md") or Path(argv[0]).expanduser().exists()):
+            argv.insert(0, "open")
         args = parser.parse_args(argv)
         if not 1 <= args.lines <= 10000:
             parser.error("--lines must be between 1 and 10000")

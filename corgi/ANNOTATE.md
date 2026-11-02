@@ -24,7 +24,7 @@ Linux amd64/arm64 and macOS arm64/x86_64 backend builds are supported.
 Run these from a shell inside your Corgi workspace:
 
 ```bash
-corgi-annotate open plan.md    # review a document
+corgi-annotate plan.md         # review a document (short for open plan.md)
 corgi-annotate last            # choose a recent assistant reply
 corgi-annotate last-newest     # review the newest reply directly
 corgi-annotate terminal        # review this pane's recent terminal output
@@ -40,6 +40,11 @@ pane's working directory.
 Interactive commands open a new split beside the source pane. `--here` uses the
 calling terminal instead. `open` without a path browses Markdown files in the
 source pane's working directory.
+
+In Neovim running inside Corgi, **Space A** reviews the current file in a split
+beside Neovim. Save the buffer first; the review reads the file on disk. Neovim
+cannot show the agent picker, so with several agents in the workspace, run the
+review from a shell instead.
 
 In the review UI:
 
