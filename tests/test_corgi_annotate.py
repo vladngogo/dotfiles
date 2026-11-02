@@ -309,11 +309,13 @@ if os.environ.get('TUI_SEND'):
 
     def test_bare_path_opens_document(self):
         (self.root / "plan.md").write_text("a plan\n")
-        result = subprocess.run([sys.executable, str(SCRIPT), "plan.md", "--here"], cwd=self.root,
-                                capture_output=True, text=True, env=dict(os.environ), timeout=20)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        call = json.loads((self.root / "tui.json").read_text())
-        self.assertEqual(call["args"], [str(self.root / "plan.md")])
+        for argv in (["plan.md", "--here"], ["--here", "--pane", "7", "plan.md"], ["--to=7", "--here", "plan.md"]):
+            (self.root / "tui.json").unlink(missing_ok=True)
+            result = subprocess.run([sys.executable, str(SCRIPT), *argv], cwd=self.root,
+                                    capture_output=True, text=True, env=dict(os.environ), timeout=20)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            call = json.loads((self.root / "tui.json").read_text())
+            self.assertEqual(call["args"], [str(self.root / "plan.md")])
 
     def test_mistyped_command_still_lists_choices(self):
         result = self.cli("termnal", success=False)
