@@ -23,8 +23,13 @@ Usage: keystash <command> [args]
 
 Store: ${STORE} (override with KEYSTASH_DIR)
 
+Interactive save:
+  Paste your secret; ****** confirms input was received (not its length).
+  Ctrl-D saves, Ctrl-C cancels. Empty input is never saved.
+  Multi-line input is preserved; Enter adds a newline and is not needed to save.
+
 Examples:
-  keystash save openai                    # paste, then Ctrl-D; nothing echoes
+  keystash save openai                    # paste, then Ctrl-D; masked confirmation
   wl-paste -n | keystash save openai      # or pipe it in
   export OPENAI_API_KEY="\$(cat "\$(keystash path openai)")"
   keystash rsa deploy                     # prompts for a passphrase
@@ -32,7 +37,18 @@ Examples:
 EOF
 }
 
-die() { echo "keystash: $*" >&2; exit 1; }
+bold="" muted="" green="" amber="" red="" reset=""
+if [ -t 2 ] && [ "${TERM:-dumb}" != dumb ] && [ -z "${NO_COLOR:-}" ]; then
+    bold=$'\033[1m'
+    muted=$'\033[2m'
+    green=$'\033[32m'
+    amber=$'\033[33m'
+    red=$'\033[31m'
+    reset=$'\033[0m'
+fi
+
+status() { printf '%s%s%s\n' "$1" "$2" "$reset" >&2; }
+die() { status "$red" "keystash: $*"; exit 1; }
 
 # Remove a half-written temp file and restore terminal echo on any exit,
 # including Ctrl-C mid-paste.
@@ -83,12 +99,23 @@ cmd_save() {
         # -icanon lifts the terminal's ~4 KB line limit, which would otherwise
         # silently truncate long single-line pastes; Ctrl-D is then a plain byte.
         stty -echo -icanon min 1 time 0
-        echo "Paste the secret, then press Ctrl-D (input is hidden):" >&2
-        local secret=""
-        IFS= read -r -d $'\004' secret || true
+        status "$bold" "Save secret: $name"
+        status "$muted" "  $dest"
+        if [ -e "$dest" ]; then
+            status "$amber" "The existing secret will be replaced when you save."
+        fi
+        echo "Paste the secret (input is hidden). Ctrl-D saves; Ctrl-C cancels." >&2
+        local secret="" rest=""
+        # Confirm the first character immediately, before waiting for Ctrl-D.
+        IFS= read -r -n 1 -d $'\004' secret || true
+        if [ -n "$secret" ]; then
+            status "$green" "****** Input received; press Ctrl-D to save."
+            IFS= read -r -d $'\004' rest || true
+            secret+="$rest"
+        fi
         # printf is a builtin, so the secret never appears in another process's argv.
         printf '%s' "$secret" > "$tmp"
-        unset secret
+        unset secret rest
         stty "$stty_saved"
         stty_saved=""
         echo >&2
@@ -99,7 +126,7 @@ cmd_save() {
     [ -s "$tmp" ] || die "no input received; nothing saved"
     mv -f "$tmp" "$dest"
     tmp=""
-    echo "Saved $dest (mode 600, $(wc -c < "$dest" | tr -d ' ') bytes)" >&2
+    status "$green" "Saved $dest (mode 600, $(wc -c < "$dest" | tr -d ' ') bytes)"
 }
 
 cmd_rsa() {
