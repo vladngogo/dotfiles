@@ -1,6 +1,7 @@
 """Exercise keystash in an isolated HOME: modes, exact contents, no leaks."""
 import os
 import pty
+import select
 import shutil
 import subprocess
 import tempfile
@@ -56,19 +57,39 @@ class KeystashTest(unittest.TestCase):
         self.paste("long", token)
         self.assertEqual((self.store / "long").read_bytes(), token)
 
-    def paste(self, name, data):
+    def test_empty_terminal_input_has_no_confirmation_and_saves_nothing(self):
+        seen, lflag = self.paste("empty", b"", expected_status=1)
+        self.assertNotIn(b"Input received", seen)
+        self.assertIn(b"no input received; nothing saved", seen)
+        self.assertEqual(list(self.store.iterdir()), [])
+        self.assertTrue(lflag & termios.ECHO)
+        self.assertTrue(lflag & termios.ICANON)
+
+    def paste(self, name, data, expected_status=0):
         """Type data then Ctrl-D into keystash on a pty; return output and final lflag."""
         master, slave = pty.openpty()
         self.addCleanup(os.close, master)
         proc = subprocess.Popen([str(KEYSTASH), "save", name], stdin=slave,
                                 stdout=slave, stderr=slave, env=self.env)
+        def cleanup_proc():
+            if proc.poll() is None:
+                proc.kill()
+            proc.wait()
+        self.addCleanup(cleanup_proc)
         os.close(slave)
         seen = b""
         while b"hidden" not in seen:
             seen += os.read(master, 1024)
         # The prompt is printed after echo is off, so it is a safe point to type.
-        os.write(master, data + b"\x04")
-        self.assertEqual(proc.wait(timeout=10), 0)
+        if data:
+            os.write(master, data)
+            while b"****** Input received; press Ctrl-D to save." not in seen:
+                ready, _, _ = select.select([master], [], [], 5)
+                self.assertTrue(ready, "No paste confirmation before Ctrl-D")
+                seen += os.read(master, 1024)
+            self.assertFalse((self.store / name).exists())
+        os.write(master, b"\x04")
+        self.assertEqual(proc.wait(timeout=10), expected_status)
         while True:
             try:
                 chunk = os.read(master, 1024)

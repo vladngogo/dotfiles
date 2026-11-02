@@ -109,6 +109,11 @@ ssh -i "$(keystash path deploy)" host
 keystash list                          # names only, never contents
 ```
 
+When pasting interactively, `****** Input received` appears as soon as input
+arrives. The fixed mask does not reveal the secret's length. Press Ctrl-D to save
+or Ctrl-C to cancel; Enter is not needed. Empty input is rejected, and a successful
+save confirms the destination and byte count.
+
 `keystash rsa` uses `ssh-keygen` (`--bits N` for a larger key, minimum 3072). For new SSH keys
 where RSA isn't required, `ssh-keygen -t ed25519` is smaller and faster.
 Input is stored byte for byte, so pressing Enter before Ctrl-D adds a trailing newline.
