@@ -296,6 +296,20 @@ if os.environ.get('TUI_SEND'):
         self.assertEqual(code, 1, output)
         self.assertNotIn("Enter for", output)
 
+    def test_workspaces_sharing_a_folder_keep_separate_defaults(self):
+        os.environ["CORGI_PANE"] = "8"
+        self.add_agent()
+        self.state["workspaces"].append({"id": 2, "name": "same folder", "cwd": str(self.root)})
+        self.state["panes"].append(dict(copy.deepcopy(self.state["panes"][1]), id=11, workspace=2))
+        self.add_agent(pane_id=12, workspace=2)
+        self.add_agent(pane_id=13, workspace=2)
+        self.assertEqual(self.picker(b"2\n")[0], 0)
+        os.environ["CORGI_PANE"] = "11"
+        self.assertEqual(self.picker(b"1\n")[0], 0)
+        os.environ["CORGI_PANE"] = "8"
+        self.assertEqual(self.picker(b"\n")[0], 0)
+        self.assertEqual(self.delivered_to(), "9")
+
     def test_picker_default_is_scoped_to_runtime(self):
         # Pane IDs restart in each Corgi runtime, so another socket must not reuse the choice.
         os.environ["CORGI_PANE"] = "8"

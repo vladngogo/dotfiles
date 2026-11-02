@@ -204,14 +204,16 @@ def context(args):
     # Folder + socket scopes survive pane changes while keeping runtimes separate.
     socket = os.environ.get("CORGI_SOCKET") or f"/tmp/corgi-{os.getuid()}/control.sock"
     scope = json.dumps([str(Path(socket).resolve()), workspace["cwd"]])
+    # Pane IDs are per runtime and workspaces can share a folder, so key choices by workspace ID.
+    choice_scope = json.dumps([str(Path(socket).resolve()), workspace["id"]])
     if args.pane is None and args.command in ("last", "last-newest"):
-        source = workspace_agent(state, source, "--pane", scope)
+        source = workspace_agent(state, source, "--pane", choice_scope)
     target = pane_by_id(state, args.to) if args.to else source
     if args.to and not target.get("agent", {}).get("provider"):
         raise Error(f"Pane {args.to} has no detected agent", "agent_not_found")
     if args.pane is None and not args.to and args.command in (
             "open", "terminal", "manage", "paste-archive", "send-archive"):
-        target = workspace_agent(state, source, "--to", scope)
+        target = workspace_agent(state, source, "--to", choice_scope)
     cwd = source.get("cwd") or workspace["cwd"]
     return {"source": source, "target": identity(state, target), "cwd": cwd,
             "workspace": workspace["name"], "scope": scope,
