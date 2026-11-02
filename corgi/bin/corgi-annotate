@@ -499,7 +499,7 @@ def main(argv=None):
         inputs.add_argument("--file", help="read selected text from this UTF-8 file")
         parser.add_argument("--comment", help="save a capture without opening the editor")
         parser.add_argument("--archived", action="store_true", help="export archived notes")
-        if argv and argv[0].startswith("annotate."):
+        if argv and argv[0].removeprefix("annotate.") in COMMANDS:
             argv[0] = argv[0].removeprefix("annotate.")
         # A bare path means open; anything else unknown still gets argparse's list of choices.
         first = first_positional(argv)

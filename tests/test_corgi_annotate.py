@@ -318,6 +318,17 @@ if os.environ.get('TUI_SEND'):
             call = json.loads((self.root / "tui.json").read_text())
             self.assertEqual(call["args"], [str(self.root / "plan.md")])
 
+    def test_bare_path_with_command_prefix_is_not_stripped(self):
+        (self.root / "annotate.notes.md").write_text("notes\n")
+        (self.root / "notes.md").write_text("wrong file\n")
+        result = subprocess.run([sys.executable, str(SCRIPT), "annotate.notes.md", "--here"], cwd=self.root,
+                                capture_output=True, text=True, env=dict(os.environ), timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        call = json.loads((self.root / "tui.json").read_text())
+        self.assertEqual(call["args"], [str(self.root / "annotate.notes.md")])
+        self.cli("annotate.capture", "--text", "legacy", "--comment", "note")
+        self.assertIn("legacy", self.cli("export").stdout)
+
     def test_mistyped_command_still_lists_choices(self):
         result = self.cli("termnal", success=False)
         self.assertIn("invalid choice: 'termnal'", result.stderr)
