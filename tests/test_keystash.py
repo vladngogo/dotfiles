@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import tempfile
 import termios
+import time
 import unittest
 from pathlib import Path
 
@@ -76,21 +77,39 @@ class KeystashTest(unittest.TestCase):
                 proc.kill()
             proc.wait()
         self.addCleanup(cleanup_proc)
-        os.close(slave)
+        self.addCleanup(os.close, slave)
+        os.set_blocking(master, False)
+        deadline = time.monotonic() + 15
         seen = b""
+        def read_output():
+            remaining = deadline - time.monotonic()
+            self.assertGreater(remaining, 0, "Timed out waiting for terminal output")
+            self.assertTrue(select.select([master], [], [], remaining)[0], "No terminal output")
+            chunk = os.read(master, 65536)
+            self.assertTrue(chunk, "Terminal closed unexpectedly")
+            return chunk
+
+        def write_input(data):
+            while data:
+                remaining = deadline - time.monotonic()
+                self.assertGreater(remaining, 0, "Timed out writing terminal input")
+                self.assertTrue(select.select([], [master], [], remaining)[1], "Terminal input stalled")
+                try:
+                    data = data[os.write(master, data):]
+                except BlockingIOError:
+                    pass
+
         while b"hidden" not in seen:
-            seen += os.read(master, 1024)
+            seen += read_output()
         # The prompt is printed after echo is off, so it is a safe point to type.
         if data:
-            os.write(master, data)
+            write_input(data)
             while b"****** Input received; press Ctrl-D to save." not in seen:
-                ready, _, _ = select.select([master], [], [], 5)
-                self.assertTrue(ready, "No paste confirmation before Ctrl-D")
-                seen += os.read(master, 1024)
+                seen += read_output()
             self.assertFalse((self.store / name).exists())
-        os.write(master, b"\x04")
+        write_input(b"\x04")
         self.assertEqual(proc.wait(timeout=10), expected_status)
-        while True:
+        while select.select([master], [], [], 0)[0]:
             try:
                 chunk = os.read(master, 1024)
             except OSError:
@@ -98,7 +117,7 @@ class KeystashTest(unittest.TestCase):
             if not chunk:
                 break
             seen += chunk
-        return seen, termios.tcgetattr(master)[3]
+        return seen, termios.tcgetattr(slave)[3]
 
     def test_save_refuses_overwrite_unless_forced(self):
         self.run_ks("save", "k", stdin=b"one")

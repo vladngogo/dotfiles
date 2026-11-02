@@ -51,7 +51,7 @@ def check_tools(commands):
 
 
 def shell_setup(home):
-    config = Path(os.environ.get("XDG_CONFIG_HOME", home / ".config")) / "dotfiles"
+    config = Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config") / "dotfiles"
     config.mkdir(parents=True, exist_ok=True)
     target = config / "env.sh"
     source = ROOT / "shell/env.sh"
@@ -62,7 +62,7 @@ def shell_setup(home):
             target.rename(target.with_name(f"env.sh.bak.{uuid.uuid4().hex}"))
         target.symlink_to(source)
     block = f"{BEGIN}\n. {shlex.quote(str(target))}\n{END}"
-    zsh = Path(os.environ.get("ZDOTDIR", home)) / ".zshrc"
+    zsh = Path(os.environ.get("ZDOTDIR") or home) / ".zshrc"
     # Bash reads only the first existing login file, unlike interactive bashrc.
     login = next((home / name for name in (".bash_profile", ".bash_login", ".profile")
                   if (home / name).exists()), home / ".profile")
@@ -85,7 +85,7 @@ def shell_setup(home):
 def install_font(home):
     if platform.system() != "Linux":
         return  # Homebrew installs the same family as a cask on macOS.
-    data = Path(os.environ.get("XDG_DATA_HOME", home / ".local/share"))
+    data = Path(os.environ.get("XDG_DATA_HOME") or home / ".local/share")
     dest = data / "fonts/dotfiles-jetbrains-mono"
     marker = dest / ".version"
     if marker.exists() and marker.read_text() == FONT_VERSION and list(dest.glob("*.ttf")):

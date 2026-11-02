@@ -62,6 +62,21 @@ class SetupTest(unittest.TestCase):
             manage.shell_setup(self.home)
         self.assertEqual(path.read_text(), manage.BEGIN + "\nlocal content\n")
 
+    def test_empty_xdg_and_zdotdir_use_home_defaults(self):
+        with patch.dict(os.environ, {"XDG_CONFIG_HOME": "", "XDG_DATA_HOME": "", "ZDOTDIR": ""}):
+            manage.shell_setup(self.home)
+            marker = self.home / ".local/share/fonts/dotfiles-jetbrains-mono/.version"
+            marker.parent.mkdir(parents=True)
+            marker.write_text(manage.FONT_VERSION)
+            (marker.parent / "font.ttf").touch()
+            with patch.object(manage.platform, "system", return_value="Linux"), \
+                    patch.object(manage, "run") as run:
+                manage.install_font(self.home)
+                run.assert_not_called()
+        target = self.home / ".config/dotfiles/env.sh"
+        self.assertTrue(target.is_symlink())
+        self.assertIn(str(target), (self.home / ".zshrc").read_text())
+
     def test_versions_fail_old_tools_and_failed_processes(self):
         versions = {"nvim": "NVIM v0.11.5", "tree-sitter": "tree-sitter 0.26.1",
                     "python3": "Python 3.13.7", "opencode": "2.1.0"}
