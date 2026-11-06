@@ -142,6 +142,24 @@ exit "${FAKE_CURL_FAIL:-0}"
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
             self.assertFalse(list(path.parent.glob(f"{path.name}.bak.*")))
 
+    def test_canonical_seeded_when_tool_entry_points_exist(self):
+        # Hand-written claude/codex files must not block seeding the canonical;
+        # otherwise the opencode link points at a file that never appears.
+        self.env["XDG_CONFIG_HOME"] = str(self.home / "custom config")
+        canonical, targets = self.instruction_targets()
+        for target in targets[:2]:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("My own instructions\n")
+        self.run_install()
+        self.run_install()
+        self.assertEqual(canonical.read_text(),
+                         (ROOT / "agents/seed.md").read_text())
+        for target in targets[:2]:
+            self.assertFalse(target.is_symlink())
+            self.assertEqual(target.read_text(), "My own instructions\n")
+        self.assertEqual(os.readlink(targets[2]), str(canonical))
+        self.assertTrue(targets[2].exists())
+
     def test_foreign_instruction_symlinks_are_preserved(self):
         local = self.home / "my-instructions.md"
         local.write_text("My rules\n")

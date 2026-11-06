@@ -113,23 +113,26 @@ link "$DOTFILES/bin/dotfiles" "$HOME/.local/bin/dotfiles"
 AGENTS_CANONICAL="${XDG_CONFIG_HOME:-$HOME/.config}/agent-instructions/AGENTS.md"
 CLAUDE_DIR="$HOME/.claude"
 
-seed_instructions() {
+seed_canonical() {
+    if [ -e "$AGENTS_CANONICAL" ] || [ -L "$AGENTS_CANONICAL" ]; then return; fi
+    mkdir -p "$(dirname "$AGENTS_CANONICAL")"
+    install -m 644 "$AGENTS_SRC/seed.md" "$AGENTS_CANONICAL"
+    echo "Seeded $AGENTS_CANONICAL (machine-local; installs never overwrite it)"
+}
+
+link_instructions() {
     local target="$1"
     remove_instruction_link "$AGENTS_SRC/AGENTS.md" "$target"
     remove_instruction_link "$DOTFILES/claude/CLAUDE.md" "$target"
     if [ -e "$target" ] || [ -L "$target" ]; then return; fi
-    mkdir -p "$(dirname "$AGENTS_CANONICAL")"
-    if [ ! -e "$AGENTS_CANONICAL" ] && [ ! -L "$AGENTS_CANONICAL" ]; then
-        install -m 644 "$AGENTS_SRC/seed.md" "$AGENTS_CANONICAL"
-        echo "Seeded $AGENTS_CANONICAL (machine-local; installs never overwrite it)"
-    fi
     mkdir -p "$(dirname "$target")"
     ln -s "$AGENTS_CANONICAL" "$target"
     echo "Linked $target → $AGENTS_CANONICAL"
 }
 
-seed_instructions "$CLAUDE_DIR/CLAUDE.md"
-seed_instructions "$HOME/.codex/AGENTS.md"
+seed_canonical
+link_instructions "$CLAUDE_DIR/CLAUDE.md"
+link_instructions "$HOME/.codex/AGENTS.md"
 # Legacy entry point from older installs; Claude Code reads CLAUDE.md only.
 remove_instruction_link "$AGENTS_SRC/AGENTS.md" "$CLAUDE_DIR/AGENTS.md"
 # Claude Code and Corgi rewrite settings.json, so merge the repo's entries into

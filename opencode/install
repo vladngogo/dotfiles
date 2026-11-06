@@ -92,7 +92,8 @@ def install(root, config, canonical=None):
     if instructions.is_symlink() and os.readlink(instructions) == str(root / "agents/AGENTS.md"):
         instructions.unlink()
         print(f"Removed stale instruction link {instructions}")
-    if canonical is not None and not instructions.exists() and not instructions.is_symlink():
+    if (canonical is not None and canonical.is_file()
+            and not instructions.exists() and not instructions.is_symlink()):
         instructions.symlink_to(canonical)
         print(f"Linked {instructions} → {canonical}")
     for source in sorted((root / "agents/skills").iterdir()):
