@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install the thin OpenCode adapter and retire known, obsolete integrations."""
+"""Install the thin OpenCode adapter: shared skills, machine-local instructions."""
 import json
 import os
 import shutil
@@ -8,7 +8,7 @@ from pathlib import Path
 from uuid import uuid4
 
 
-def install(root, config):
+def install(root, config, canonical=None):
     config.mkdir(parents=True, exist_ok=True)
     archive = config / "retired" / uuid4().hex
 
@@ -90,7 +90,12 @@ def install(root, config):
 
     instructions = config / "AGENTS.md"
     if instructions.is_symlink() and os.readlink(instructions) == str(root / "agents/AGENTS.md"):
-        retire(instructions)
+        instructions.unlink()
+        print(f"Removed stale instruction link {instructions}")
+    if (canonical is not None and canonical.is_file()
+            and not instructions.exists() and not instructions.is_symlink()):
+        instructions.symlink_to(canonical)
+        print(f"Linked {instructions} → {canonical}")
     for source in sorted((root / "agents/skills").iterdir()):
         if (source / "SKILL.md").is_file():
             link(source, skills / source.name)
@@ -98,6 +103,7 @@ def install(root, config):
 
 if __name__ == "__main__":
     try:
-        install(Path(sys.argv[1]).absolute(), Path(sys.argv[2]).absolute())
+        canonical = Path(sys.argv[3]).absolute() if len(sys.argv) > 3 else None
+        install(Path(sys.argv[1]).absolute(), Path(sys.argv[2]).absolute(), canonical)
     except (ValueError, OSError) as error:
         sys.exit(str(error))

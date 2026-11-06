@@ -25,10 +25,13 @@ link() {
     echo "Linked $target → $src"
 }
 
-retire_instruction_link() {
+remove_instruction_link() {
+    # Old installers linked instruction files into this checkout; those sources
+    # are gone, so such links dangle. Remove them; real files are never touched.
     local src="$1" target="$2"
     if [ -L "$target" ] && [ "$(readlink "$target")" = "$src" ]; then
-        backup "$target"
+        rm "$target"
+        echo "Removed stale instruction link $target → $src"
     fi
 }
 
@@ -103,11 +106,35 @@ link "$DOTFILES/corgi/bin/corgi-annotate" "$HOME/.local/bin/corgi-annotate"
 link "$DOTFILES/bin/keystash" "$HOME/.local/bin/keystash"
 link "$DOTFILES/bin/dotfiles" "$HOME/.local/bin/dotfiles"
 
-# Global instructions belong to the machine; retire only this installer's links.
+# Global instructions belong to the machine: this repo tracks no ruleset. Each
+# machine keeps one canonical file, linked into every tool's entry point. The
+# canonical is seeded only when missing and never modified; an entry point that
+# already exists (own file or foreign link) is left alone.
+AGENTS_CANONICAL="${XDG_CONFIG_HOME:-$HOME/.config}/agent-instructions/AGENTS.md"
 CLAUDE_DIR="$HOME/.claude"
-retire_instruction_link "$AGENTS_SRC/AGENTS.md" "$CLAUDE_DIR/AGENTS.md"
-retire_instruction_link "$DOTFILES/claude/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
-retire_instruction_link "$AGENTS_SRC/AGENTS.md" "$HOME/.codex/AGENTS.md"
+
+seed_canonical() {
+    if [ -e "$AGENTS_CANONICAL" ] || [ -L "$AGENTS_CANONICAL" ]; then return; fi
+    mkdir -p "$(dirname "$AGENTS_CANONICAL")"
+    install -m 644 "$AGENTS_SRC/seed.md" "$AGENTS_CANONICAL"
+    echo "Seeded $AGENTS_CANONICAL (machine-local; installs never overwrite it)"
+}
+
+link_instructions() {
+    local target="$1"
+    remove_instruction_link "$AGENTS_SRC/AGENTS.md" "$target"
+    remove_instruction_link "$DOTFILES/claude/CLAUDE.md" "$target"
+    if [ -e "$target" ] || [ -L "$target" ]; then return; fi
+    mkdir -p "$(dirname "$target")"
+    ln -s "$AGENTS_CANONICAL" "$target"
+    echo "Linked $target → $AGENTS_CANONICAL"
+}
+
+seed_canonical
+link_instructions "$CLAUDE_DIR/CLAUDE.md"
+link_instructions "$HOME/.codex/AGENTS.md"
+# Legacy entry point from older installs; Claude Code reads CLAUDE.md only.
+remove_instruction_link "$AGENTS_SRC/AGENTS.md" "$CLAUDE_DIR/AGENTS.md"
 # Claude Code and Corgi rewrite settings.json, so merge the repo's entries into
 # the local file instead of linking it.
 python3 "$DOTFILES/claude/merge-settings" "$DOTFILES/claude/settings.json" "$CLAUDE_DIR/settings.json"
@@ -127,8 +154,9 @@ case ":$PATH:" in
     *) echo "WARNING: ~/.local/bin is not on PATH — add it to run corgi and the agent tools." ;;
 esac
 
-# OpenCode V2: shared skills, with instructions, preferences and runtime state local.
-python3 "$DOTFILES/opencode/install" "$DOTFILES" "${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
+# OpenCode V2: shared skills; instructions, preferences and runtime state local.
+python3 "$DOTFILES/opencode/install" "$DOTFILES" \
+    "${XDG_CONFIG_HOME:-$HOME/.config}/opencode" "$AGENTS_CANONICAL"
 
 
 # ── treesitter prerequisites ──────────────────────────────────

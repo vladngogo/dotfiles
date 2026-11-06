@@ -244,7 +244,7 @@ corgi/
   ANNOTATE.md       — annotation commands, targeting and migration guide
 tests/              — installer, keystash and annotation tests; opt-in live smoke test
 agents/             — shared agent skills, hooks and tools
-  AGENTS.md         — legacy reference for archived links; not installed
+  seed.md           — starter global instructions, seeded once per machine
   skills/<name>/    — SKILL.md skills (build-evals, fold-or-keep)
   hooks/guard-bash  — blocks pushes to main/master, force pushes, and credential-path access
   hooks/lint-edit   — runs shellcheck on shell scripts right after an agent edits them
@@ -253,7 +253,6 @@ agents/             — shared agent skills, hooks and tools
   repos/<repo>.md   — personal notes for one repo
   tests/            — `python3 -m unittest discover -s agents/tests`
 claude/             — thin Claude Code adapter
-  CLAUDE.md         — legacy import wrapper for archived links; not installed
   settings.json     — deny reads of secrets, allow read-only system queries, wires the guard and lint hooks
   merge-settings    — merge settings.json into ~/.claude/settings.json (install.sh)
 opencode/           — thin OpenCode V2 adapter
@@ -262,28 +261,30 @@ opencode/           — thin OpenCode V2 adapter
 
 ### Agents
 
-Global instructions are machine-local. Create or edit the files for the tools
-you use; setup does not create, overwrite or link them:
+Global instructions are machine-local: this repo tracks no ruleset, because
+each machine's working style and facts differ. Every machine keeps one
+canonical ruleset, and setup wires each tool's entry point to it:
 
-| Tool | Local instruction file |
+| Tool | Entry point (symlink to the canonical file) |
 |---|---|
 | Claude Code | `~/.claude/CLAUDE.md` |
 | Codex | `~/.codex/AGENTS.md` |
 | OpenCode | `${XDG_CONFIG_HOME:-~/.config}/opencode/AGENTS.md` |
 
-On upgrade, the installer archives only global instruction symlinks pointing to
-this checkout: Claude/Codex links become adjacent `.bak.*` files, and OpenCode's
-link moves under its config directory's `retired/` folder. Existing local files
-and links to other sources are preserved. The legacy source files in this repo
-remain available so archived links stay readable, but are no longer installed.
-If you used `~/.claude/local.md`, import it explicitly from your local
-`~/.claude/CLAUDE.md` or move its rules there; the old automatic wrapper is retired.
+The canonical file is
+`${XDG_CONFIG_HOME:-~/.config}/agent-instructions/AGENTS.md`. Setup seeds it
+from `agents/seed.md` only when it is missing, and never modifies it
+afterwards. An entry point that already exists — your own file, or a link to
+anywhere — is left untouched. Links that older installers pointed into this
+checkout are removed, since their sources are gone. If you used
+`~/.claude/local.md` or a hand-written `~/.claude/CLAUDE.md`, fold those rules
+into the canonical file yourself.
 
 Instruction scopes:
 
 | Layer | Where | Committed to the project repo? |
 |---|---|---|
-| Personal, this machine | the tool's local instruction file above | no |
+| Personal, this machine | the canonical file above | no |
 | Team, one repo | that repo's `AGENTS.md` (+ `CLAUDE.md` containing `@AGENTS.md`) | yes |
 | Personal, one repo | `agents/repos/<repo>.md` → `CLAUDE.local.md` via `agent-link` | no |
 
@@ -292,8 +293,11 @@ seen your setup, get worse results without it? Then it's the repo's. If it
 would be wrong or irrelevant for them, it's personal. Rules that must never
 break go in CODEOWNERS, branch protection, hooks or CI, not only in prose.
 
-Machine facts (hostnames, hardware, local doc paths) belong in those local files,
-outside this repo.
+Machine facts (hostnames, hardware, local doc paths) belong in the canonical
+file on that machine, outside this repo.
+
+`tests/test_repo_rules.py` fails the build if an agent ruleset is ever tracked
+here again, so the layers can't silently re-merge.
 
 Run `agent-link --init` in a fresh clone to attach (or create) your notes. It
 hides the link with `.git/info/exclude`, so the team's `.gitignore` is untouched.
@@ -308,12 +312,14 @@ to `claude/settings.json` and re-run `install.sh`; removing one from the repo
 does not remove it locally, and a repo hook deleted locally comes back on the
 next install (remove it from the repo to opt out).
 
-OpenCode gets individual shared skill links. Global instructions, server configuration
-and `cli.json` preferences stay local; no custom agents or plugins are required.
-The installer archives dangling links to this checkout's old OpenCode files and
-Herdr-marked integrations under the OpenCode config directory's `retired/` folder,
-removing their CLI plugin references while preserving other preferences. Original
-CLI settings are backed up there. Unrelated plugins and configuration are preserved.
+OpenCode gets individual shared skill links. Global instructions, server
+configuration and `cli.json` preferences stay local; no custom agents or
+plugins are required. The installer removes the former instruction link and
+archives dangling links to this checkout's old OpenCode files and Herdr-marked
+integrations under the OpenCode config directory's `retired/` folder, removing
+their CLI plugin references while preserving other preferences. Original
+CLI settings are backed up there. Unrelated plugins and configuration are
+preserved.
 
 Skills go stale as models improve. Before adding one, check the model doesn't
 already do the task well without it, and prune ones that no longer earn their

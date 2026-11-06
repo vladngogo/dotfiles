@@ -24,9 +24,10 @@ Custom endpoints and provider configuration belong in the tool's local config,
 not this repository. Do not export provider keys globally in shell/env.sh.
 Git author identity is also local; set it yourself with git config --global.
 
-Global agent instructions are also machine-local. Edit the files for your tools:
-  Claude Code: ~/.claude/CLAUDE.md
-  Codex:       ~/.codex/AGENTS.md
-  OpenCode:    ${XDG_CONFIG_HOME:-~/.config}/opencode/AGENTS.md
-Setup does not create or sync these files. Old repo-created instruction links
-are archived on upgrade; see README.md for migration details.
+Global agent instructions are machine-local; this repo tracks none. Each
+machine keeps one canonical ruleset:
+  ${XDG_CONFIG_HOME:-~/.config}/agent-instructions/AGENTS.md
+Setup seeds it from agents/seed.md only when missing and never overwrites it,
+linking each tool's entry point (~/.claude/CLAUDE.md, ~/.codex/AGENTS.md,
+opencode/AGENTS.md) to it when that entry point does not already exist.
+See README.md for migration details.
