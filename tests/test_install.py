@@ -112,59 +112,68 @@ exit "${FAKE_CURL_FAIL:-0}"
         self.assertFalse(settings.is_symlink())
         self.assertEqual(json.loads(settings.read_text()), self.repo_settings())
         self.assertFalse((self.home / ".tmux.conf").is_symlink())
-        for target in self.instruction_files():
-            self.assertFalse(target.exists() or target.is_symlink(), str(target))
+        canonical, targets = self.instruction_targets()
+        self.assertEqual(canonical.read_text(),
+                         (ROOT / "agents/seed.md").read_text())
+        self.assertFalse(canonical.is_symlink())
+        for target in targets:
+            self.assertEqual(os.readlink(target), str(canonical))
+        self.assertFalse((self.home / ".claude/AGENTS.md").exists())
 
-    def instruction_files(self):
+    def instruction_targets(self):
         config = Path(self.env.get("XDG_CONFIG_HOME", self.home / ".config"))
-        return {
-            self.home / ".claude/AGENTS.md": self.dotfiles / "agents/AGENTS.md",
-            self.home / ".claude/CLAUDE.md": self.dotfiles / "claude/CLAUDE.md",
-            self.home / ".codex/AGENTS.md": self.dotfiles / "agents/AGENTS.md",
-            config / "opencode/AGENTS.md": self.dotfiles / "agents/AGENTS.md",
-        }
+        canonical = config / "agent-instructions/AGENTS.md"
+        return canonical, (self.home / ".claude/CLAUDE.md",
+                           self.home / ".codex/AGENTS.md",
+                           config / "opencode/AGENTS.md")
 
     def test_existing_local_instructions_survive_repeated_installs(self):
         self.env["XDG_CONFIG_HOME"] = str(self.home / "custom config")
-        for target in self.instruction_files():
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text("Machine-local instructions\n")
-            target.chmod(0o600)
+        canonical, targets = self.instruction_targets()
+        for path in (canonical, *targets):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("Machine-local instructions\n")
+            path.chmod(0o600)
         self.run_install()
         self.run_install()
-        for target in self.instruction_files():
-            self.assertFalse(target.is_symlink())
-            self.assertEqual(target.read_text(), "Machine-local instructions\n")
-            self.assertEqual(target.stat().st_mode & 0o777, 0o600)
-            self.assertFalse(list(target.parent.glob(f"{target.name}.bak.*")))
+        for path in (canonical, *targets):
+            self.assertFalse(path.is_symlink())
+            self.assertEqual(path.read_text(), "Machine-local instructions\n")
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            self.assertFalse(list(path.parent.glob(f"{path.name}.bak.*")))
 
     def test_foreign_instruction_symlinks_are_preserved(self):
         local = self.home / "my-instructions.md"
         local.write_text("My rules\n")
-        for target in self.instruction_files():
+        for target in self.instruction_targets()[1]:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.symlink_to(local)
         self.run_install()
         self.run_install()
-        for target in self.instruction_files():
+        for target in self.instruction_targets()[1]:
             self.assertEqual(os.readlink(target), str(local))
         self.assertEqual(local.read_text(), "My rules\n")
 
-    def test_repo_instruction_links_are_archived_once(self):
+    def test_repo_instruction_links_migrate_to_the_machine_canonical(self):
         self.env["XDG_CONFIG_HOME"] = str(self.home / "custom config")
-        for target, source in self.instruction_files().items():
+        canonical, targets = self.instruction_targets()
+        sources = {targets[0]: self.dotfiles / "claude/CLAUDE.md",
+                   targets[1]: self.dotfiles / "agents/AGENTS.md",
+                   targets[2]: self.dotfiles / "agents/AGENTS.md"}
+        legacy = self.home / ".claude/AGENTS.md"
+        legacy.parent.mkdir(parents=True)
+        legacy.symlink_to(self.dotfiles / "agents/AGENTS.md")
+        for target, source in sources.items():
             target.parent.mkdir(parents=True, exist_ok=True)
             target.symlink_to(source)
         self.run_install()
-        for target, source in self.instruction_files().items():
-            self.assertFalse(target.exists() or target.is_symlink())
-            if target.parent.name == "opencode":
-                backups = list((target.parent / "retired").glob("*/AGENTS.md"))
-            else:
-                backups = list(target.parent.glob(f"{target.name}.bak.*"))
-            self.assertEqual(len(backups), 1)
-            self.assertEqual(os.readlink(backups[0]), str(source))
-            self.assertEqual(backups[0].read_text(), source.read_text())
+        self.assertFalse(legacy.exists() or legacy.is_symlink())
+        self.assertEqual(canonical.read_text(),
+                         (ROOT / "agents/seed.md").read_text())
+        for target in targets:
+            self.assertEqual(os.readlink(target), str(canonical))
+        for path in (*targets, legacy):
+            self.assertFalse(list(path.parent.glob(f"{path.name}.bak.*")))
         before = sorted(str(p) for p in self.home.rglob("*"))
         self.run_install()
         self.assertEqual(sorted(str(p) for p in self.home.rglob("*")), before)
