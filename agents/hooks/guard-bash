@@ -4,6 +4,8 @@
 1. git pushes that write to main/master, force-push, or push every branch.
 2. Commands that touch credential files (~/.ssh, ~/.aws, gh config, .env,
    the keystash store ~/.secrets).
+3. sudo (it can't prompt in an agent shell) and `pkill -f` (the pattern also
+   matches the agent's own shell, whose command line contains it).
 
 Input: a shell command as argv[1], or a Claude Code PreToolUse JSON payload on
 stdin (tool_input.command). Exit 2 blocks; the stderr message is shown to the
@@ -37,7 +39,7 @@ SECRET_PATTERNS = [
 SECRET_ALLOWED = re.compile(r"\.env\.(example|sample|template|dist)$")
 
 PROTECTED = {"main", "master"}
-SEPARATORS = {";", "&&", "||", "|", "&", "(", ")", "\n"}
+SEPARATORS = {";", "&&", "||", "|", "|&", "&", "(", ")", "\n"}
 GIT_OPTS_WITH_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace"}
 PUSH_OPTS_WITH_VALUE = {"-o", "--push-option", "--repo", "--receive-pack", "--exec"}
 PUSH_ALL = {"--all", "--mirror", "--branches"}
@@ -155,6 +157,82 @@ def check_secrets(tokens: list[str]) -> str | None:
     return None
 
 
+HEREDOC = re.compile(
+    r"(?<!<)<<(?!<)-?\s*\\?(['\"]?)([\w.-]+)\1([^\n]*)\n.*?^[ \t]*\2[ \t]*$",
+    re.DOTALL | re.MULTILINE,
+)
+# Words that can precede the command actually run in a segment.
+KEYWORDS = {"if", "then", "else", "elif", "do", "while", "until", "!", "{"}
+WRAPPERS = {"env", "time", "nohup", "exec"}  # may take their own -options
+# Not WRAPPERS: `command -v sudo` only looks the name up.
+COMMAND_PREFIXES = KEYWORDS | WRAPPERS | {"command", "builtin"}
+ASSIGNMENT = re.compile(r"^\w+=")
+
+
+def one_line(cmd: str) -> str:
+    """Drop heredoc bodies and comments; turn unquoted newlines into `;`.
+
+    The tokenizer treats a newline as plain whitespace, which would hide the
+    start of each command on later lines. Heredoc bodies and quoted text are
+    data, so a root command written out for the user is not a sudo call.
+    """
+    cmd = HEREDOC.sub(r"\3", cmd)
+    out: list[str] = []
+    quote = None
+    i = 0
+    while i < len(cmd):
+        c = cmd[i]
+        if c == "\\" and quote != "'" and i + 1 < len(cmd):
+            if cmd[i + 1] != "\n":  # backslash-newline is a line continuation
+                out.append(cmd[i:i + 2])
+            i += 2
+            continue
+        if quote:
+            if c == quote:
+                quote = None
+        elif c in "'\"":
+            quote = c
+        elif c == "#" and (i == 0 or cmd[i - 1].isspace()):
+            while i < len(cmd) and cmd[i] != "\n":
+                i += 1
+            continue
+        elif c == "\n":
+            c = " ; "
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
+def command_word(seg: list[str]) -> tuple[str, list[str]]:
+    i = 0
+    wrapped = False
+    while i < len(seg):
+        t = seg[i]
+        if t in COMMAND_PREFIXES:
+            wrapped = t in WRAPPERS
+        elif not (ASSIGNMENT.match(t) or (wrapped and t.startswith("-"))):
+            break
+        i += 1
+    if i == len(seg):
+        return "", []
+    return seg[i].rsplit("/", 1)[-1], seg[i + 1:]  # /usr/bin/sudo is sudo
+
+
+def check_command(seg: list[str]) -> str | None:
+    word, args = command_word(seg)
+    if word == "sudo":
+        return ("sudo can't prompt here. Give the user the root commands in one "
+                "copy-paste block per host and wait for them to confirm.")
+    if word == "pkill":
+        for a in args:
+            if a == "--":
+                break
+            if a == "--full" or (a.startswith("-") and not a.startswith("--") and "f" in a[1:]):
+                return ("pkill -f also matches this shell's own command line. List "
+                        "with `pgrep -af <pattern>`, then `kill <pid>`.")
+    return None
+
+
 def check(cmd: str) -> str | None:
     tokens = tokenize(cmd)
     reason = check_secrets(tokens)
@@ -166,6 +244,10 @@ def check(cmd: str) -> str | None:
             reason = check_push(*parsed)
             if reason:
                 return reason
+    for seg in segments(tokenize(one_line(cmd))):
+        reason = check_command(seg)
+        if reason:
+            return reason
     return None
 
 

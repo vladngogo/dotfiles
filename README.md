@@ -246,7 +246,7 @@ tests/              — installer, keystash and annotation tests; opt-in live sm
 agents/             — shared agent skills, hooks and tools
   seed.md           — starter global instructions, seeded once per machine
   skills/<name>/    — SKILL.md skills (build-evals, fold-or-keep)
-  hooks/guard-bash  — blocks pushes to main/master, force pushes, and credential-path access
+  hooks/guard-bash  — blocks pushes to main/master, force pushes, credential-path access, sudo and `pkill -f`
   hooks/lint-edit   — runs shellcheck on shell scripts right after an agent edits them
   bin/agent-eval    — eval loop: run cases in parallel worktrees, grade, compare (→ ~/.local/bin)
   bin/agent-link    — attach repos/<repo>.md to a repo as CLAUDE.local.md, uncommitted

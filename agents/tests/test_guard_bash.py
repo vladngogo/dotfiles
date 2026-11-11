@@ -65,6 +65,41 @@ CASES = [
     ("cp .env.example .env.sample", False, False),
     ("python3 -m venv .venv && .venv/bin/pip install -r requirements.txt", False, False),
     ("ssh-keygen -l -f key.pub", False, False),
+    # sudo can't prompt in an agent shell
+    ("sudo apt install foo", True, True),
+    ("cd /tmp && sudo -n true", True, True),
+    ("FOO=1 sudo make install", True, True),
+    ("if sudo -n true; then echo ok; fi", True, True),
+    ("echo x | sudo tee /etc/foo", True, True),
+    ("ls\nsudo reboot", True, True),
+    ("ls # list\nsudo reboot", True, True),
+    ("echo $(sudo cat /etc/hostname)", True, True),
+    ("foo |& sudo tee /etc/foo", True, True),
+    ("time -p sudo ls", True, True),
+    ("env -i sudo ls", True, True),
+    ("/usr/bin/sudo ls", True, True),
+    ("echo 'sudo apt install foo'", False, False),
+    ("apt-cache policy sudo", False, False),
+    ("command -v sudo", False, False),
+    ("grep -r sudo README.md", False, False),
+    ("ls # sudo reboot", False, False),
+    # root commands written out for the user are text, not a sudo call
+    ("cat > root.sh <<'EOF'\nsudo apt install foo\nEOF", False, False),
+    ("cat > root.sh <<\\EOF\nsudo apt install foo\nEOF", False, False),
+    ("cat > root.sh <<'END-ROOT'\nsudo apt install foo\nEND-ROOT", False, False),
+    ("cat <<EOF | sudo tee /etc/foo\nx\nEOF", True, True),
+    ("printf '%s\\n' \"run:\nsudo apt install foo\"", False, False),
+    # pkill -f matches the agent's own shell
+    ("pkill -f 'python server.py'", True, True),
+    ("pkill -9 -f server", True, True),
+    ("pkill --full server", True, True),
+    ("/usr/bin/pkill -f server", True, True),
+    ("sleep 1; pkill -fx 'python server.py'", True, True),
+    ("pkill -x nvim", False, False),
+    ("pkill -TERM firefox", False, False),
+    ("pkill -INFO firefox", False, False),  # signal name, not -f
+    ("pgrep -af server", False, False),
+    ("kill 1234", False, False),
 ]
 
 
