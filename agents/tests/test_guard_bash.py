@@ -78,6 +78,28 @@ CASES = [
     ("time -p sudo ls", True, True),
     ("env -i sudo ls", True, True),
     ("/usr/bin/sudo ls", True, True),
+    # redirections may come before the command word
+    ("</dev/null sudo apt-get install -y foo", True, True),
+    ("2>/dev/null sudo reboot", True, True),
+    ("&>/dev/null sudo reboot", True, True),
+    ("2>&1 >out sudo -n true", True, True),
+    ("ls > sudo", False, False),
+    # wrapper options that take a value
+    ("env -u HOME sudo apt install foo", True, True),
+    ("env -u sudo ls", False, False),
+    ("time -o out sudo ls", True, True),
+    ("exec -a name sudo ls", True, True),
+    ("command -p sudo reboot", True, True),
+    ("command -V sudo", False, False),
+    ("env -iu HOME sudo make install", True, True),  # clustered short options
+    ("time -po out sudo ls", True, True),
+    ("env -uHOME sudo ls", True, True),
+    ("command -pv sudo", False, False),
+    # `<<` in quoted text, a comment or arithmetic is not a heredoc
+    ("printf '%s\\n' 'use << EOF to start'\nsudo reboot\nEOF", True, True),
+    ("ls # see << EOF\nsudo reboot\nEOF", True, True),
+    ("echo $((1<<2))\nsudo ls", True, True),
+    ("cat <<<'EOF'\nsudo reboot\nEOF", True, True),  # here-string, not a heredoc
     ("echo 'sudo apt install foo'", False, False),
     ("apt-cache policy sudo", False, False),
     ("command -v sudo", False, False),
@@ -93,6 +115,7 @@ CASES = [
     ("pkill -f 'python server.py'", True, True),
     ("pkill -9 -f server", True, True),
     ("pkill --full server", True, True),
+    ("pkill --fu server", True, True),  # getopt abbreviation
     ("/usr/bin/pkill -f server", True, True),
     ("sleep 1; pkill -fx 'python server.py'", True, True),
     ("pkill -x nvim", False, False),
