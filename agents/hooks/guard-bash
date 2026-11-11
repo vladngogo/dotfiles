@@ -4,6 +4,8 @@
 1. git pushes that write to main/master, force-push, or push every branch.
 2. Commands that touch credential files (~/.ssh, ~/.aws, gh config, .env,
    the keystash store ~/.secrets).
+3. sudo (it can't prompt in an agent shell) and `pkill -f` (the pattern also
+   matches the agent's own shell, whose command line contains it).
 
 Input: a shell command as argv[1], or a Claude Code PreToolUse JSON payload on
 stdin (tool_input.command). Exit 2 blocks; the stderr message is shown to the
@@ -37,7 +39,7 @@ SECRET_PATTERNS = [
 SECRET_ALLOWED = re.compile(r"\.env\.(example|sample|template|dist)$")
 
 PROTECTED = {"main", "master"}
-SEPARATORS = {";", "&&", "||", "|", "&", "(", ")", "\n"}
+SEPARATORS = {";", "&&", "||", "|", "|&", "&", "(", ")", "\n"}
 GIT_OPTS_WITH_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace"}
 PUSH_OPTS_WITH_VALUE = {"-o", "--push-option", "--repo", "--receive-pack", "--exec"}
 PUSH_ALL = {"--all", "--mirror", "--branches"}
@@ -155,6 +157,143 @@ def check_secrets(tokens: list[str]) -> str | None:
     return None
 
 
+HEREDOC_START = re.compile(r"<<-?\s*\\?(['\"]?)([\w.-]+)\1")
+REDIRECT = re.compile(r"^(&>>?|[<>]+[&|]?)$")
+KEYWORDS = {"if", "then", "else", "elif", "do", "while", "until", "!", "{"}
+# Commands that run another command, and their options that take a value.
+WRAPPERS = {
+    "env": {"-u", "--unset", "-C", "--chdir"},
+    "time": {"-o", "--output", "-f", "--format"},
+    "exec": {"-a"},
+    "nohup": set(),
+    "command": set(),
+    "builtin": set(),
+}
+LOOKUP_OPTS = {"-v", "-V"}  # `command -v sudo` only looks the name up
+ASSIGNMENT = re.compile(r"^\w+=")
+
+
+def skip_heredocs(cmd: str, i: int, delims: list[str]) -> int:
+    """Return the index of the newline ending the last pending heredoc body.
+
+    `i` is the newline after the line that opened them. If a delimiter never
+    appears, it wasn't a heredoc (`$((1<<2))`): keep the text in the scan.
+    """
+    end = i
+    for delim in delims:
+        while True:
+            nxt = cmd.find("\n", end + 1)
+            line = cmd[end + 1:nxt if nxt != -1 else len(cmd)]
+            end = nxt if nxt != -1 else len(cmd)
+            if line.strip(" \t") == delim:
+                break
+            if nxt == -1:
+                return i
+    return end
+
+
+def one_line(cmd: str) -> str:
+    """Drop heredoc bodies and comments; turn unquoted newlines into `;`.
+
+    The tokenizer treats a newline as plain whitespace, which would hide the
+    start of each command on later lines. Heredoc bodies and quoted text are
+    data, so a root command written out for the user is not a sudo call.
+    A `<<` inside quotes or a comment does not open a heredoc.
+    """
+    out: list[str] = []
+    quote = None
+    pending: list[str] = []
+    i = 0
+    while i < len(cmd):
+        c = cmd[i]
+        if c == "\\" and quote != "'" and i + 1 < len(cmd):
+            if cmd[i + 1] != "\n":  # backslash-newline is a line continuation
+                out.append(cmd[i:i + 2])
+            i += 2
+            continue
+        if quote:
+            if c == quote:
+                quote = None
+        elif c in "'\"":
+            quote = c
+        elif c == "#" and (i == 0 or cmd[i - 1].isspace()):
+            while i < len(cmd) and cmd[i] != "\n":
+                i += 1
+            continue
+        elif cmd.startswith("<<<", i):  # here-string: the next line is a command
+            out.append("<<<")
+            i += 3
+            continue
+        elif c == "<" and (m := HEREDOC_START.match(cmd, i)):
+            pending.append(m.group(2))
+            out.append(" ")
+            i = m.end()
+            continue
+        elif c == "\n":
+            if pending:
+                i = skip_heredocs(cmd, i, pending)
+                pending = []
+            c = " ; "
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
+def command_word(seg: list[str]) -> tuple[str, list[str]]:
+    i = 0
+    wrapper = None
+    while i < len(seg):
+        t = seg[i]
+        nxt = seg[i + 1] if i + 1 < len(seg) else ""
+        if REDIRECT.match(t):  # operator and its target
+            i += 2
+            continue
+        if t.isdigit() and REDIRECT.match(nxt):  # fd number, as in 2>file
+            i += 1
+            continue
+        if t in KEYWORDS:
+            wrapper = None
+        elif t in WRAPPERS:
+            wrapper = t
+        elif wrapper and t.startswith("-"):
+            if t.startswith("--"):
+                if t in WRAPPERS[wrapper]:
+                    i += 1
+            else:
+                # Short options cluster: `env -iu HOME` is `-i -u HOME`.
+                for j, ch in enumerate(t[1:], 1):
+                    if wrapper == "command" and "-" + ch in LOOKUP_OPTS:
+                        return "", []
+                    if "-" + ch in WRAPPERS[wrapper]:
+                        if j == len(t) - 1:  # value is the next token
+                            i += 1
+                        break
+        elif not ASSIGNMENT.match(t):
+            break
+        i += 1
+    if i >= len(seg):
+        return "", []
+    return seg[i].rsplit("/", 1)[-1], seg[i + 1:]  # /usr/bin/sudo is sudo
+
+
+def check_command(seg: list[str]) -> str | None:
+    word, args = command_word(seg)
+    if word == "sudo":
+        return ("sudo can't prompt here. Give the user the root commands in one "
+                "copy-paste block per host and wait for them to confirm.")
+    if word == "pkill":
+        for a in args:
+            if a == "--":
+                break
+            # getopt accepts --f and --fu as abbreviations of --full
+            long_full = a.startswith("--f") and "--full".startswith(a)
+            short_f = a.startswith("-") and not a.startswith("--") and "f" in a[1:]
+            if long_full or short_f:
+                return ("pkill -f also matches this shell's own command line. List "
+                        "with `pgrep -af <pattern>`, then `kill <pid>`.")
+    return None
+
+
 def check(cmd: str) -> str | None:
     tokens = tokenize(cmd)
     reason = check_secrets(tokens)
@@ -166,6 +305,10 @@ def check(cmd: str) -> str | None:
             reason = check_push(*parsed)
             if reason:
                 return reason
+    for seg in segments(tokenize(one_line(cmd))):
+        reason = check_command(seg)
+        if reason:
+            return reason
     return None
 
 
